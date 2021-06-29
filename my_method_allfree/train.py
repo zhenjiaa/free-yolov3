@@ -6,6 +6,9 @@ import time
 from pathlib import Path
 from threading import Thread
 from warnings import warn
+import sys
+sys.path.append('/data1/paper_/test/yolov3')
+
 
 import math
 import numpy as np
@@ -21,15 +24,15 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-import test_  # import test.py to get mAP after each epoch
-from models.yolo import Model
+import test  # import test.py to get mAP after each epoch
+from my_method_allfree.yolo_freeanchor_again import Model
 from utils.autoanchor import check_anchors
 from utils.datasets import create_dataloader
 from utils.general import labels_to_class_weights, increment_path, labels_to_image_weights, init_seeds, \
     fitness, strip_optimizer, get_latest_run, check_dataset, check_file, check_git_status, check_img_size, \
     print_mutation, set_logging
 from utils.google_utils import attempt_download
-from utils.loss import compute_loss
+from my_method_allfree.loss import compute_loss
 from utils.plots import plot_images, plot_labels, plot_results, plot_evolution
 from utils.torch_utils import ModelEMA, select_device, intersect_dicts, torch_distributed_zero_first
 
@@ -55,6 +58,8 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
     results_file = save_dir / 'results.txt'
 
     # Save run settings
+    # print(save_dir)
+    # exit()
     with open(save_dir / 'hyp.yaml', 'w') as f:
         yaml.dump(hyp, f, sort_keys=False)
     with open(save_dir / 'opt.yaml', 'w') as f:
@@ -152,6 +157,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
 
         # Epochs
         start_epoch = ckpt['epoch'] + 1
+        # start_epoch   = 1
         if opt.resume:
             assert start_epoch > 0, '%s training to %g epochs is finished, nothing to resume.' % (weights, epochs)
         if epochs < start_epoch:
@@ -162,7 +168,8 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
         del ckpt, state_dict
 
     # Image sizes
-    gs = int(max(model.stride))  # grid size (max stride)
+    gs = int(max(model.stride))  # grid size (max stride
+    # gs = 32
     imgsz, imgsz_test = [check_img_size(x, gs) for x in opt.img_size]  # verify imgsz are gs-multiples
 
     # DP mode
@@ -203,6 +210,8 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
             # cf = torch.bincount(c.long(), minlength=nc) + 1.  # frequency
             # model._initialize_biases(cf.to(device))
             if plots:
+                # print(save_dir)
+                # exit()
                 Thread(target=plot_labels, args=(labels, save_dir, loggers), daemon=True).start()
                 if tb_writer:
                     tb_writer.add_histogram('classes', c, 0)
@@ -284,8 +293,9 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
 
             # Forward
             with amp.autocast(enabled=cuda):
+                # print(imgs)
                 pred = model(imgs)  # forward
-                loss, loss_items = compute_loss(pred, targets.to(device), model)  # loss scaled by batch_size
+                loss, loss_items = compute_loss(epoch,pred, targets.to(device), model)  # loss scaled by batch_size
                 if rank != -1:
                     loss *= opt.world_size  # gradient averaged between devices in DDP mode
 
@@ -324,6 +334,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
         # Scheduler
         lr = [x['lr'] for x in optimizer.param_groups]  # for tensorboard
         scheduler.step()
+        # continue
 
         # DDP process 0 or single-GPU
         if rank in [-1, 0]:
@@ -332,15 +343,14 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                 ema.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
             final_epoch = epoch + 1 == epochs
             if not opt.notest or final_epoch:  # Calculate mAP
-                results, maps, times = test_.test(opt.data,
+                results, maps, times = test.test(opt.data,
                                                  batch_size=total_batch_size,
                                                  imgsz=imgsz_test,
                                                  model=ema.ema,
                                                  single_cls=opt.single_cls,
                                                  dataloader=testloader,
                                                  save_dir=save_dir,
-                                                 plots=plots and final_epoch,
-                                                 log_imgs=opt.log_imgs if wandb else 0)
+                                                 plots=plots and final_epoch)
 
             # Write
             with open(results_file, 'a') as f:
@@ -412,12 +422,12 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', type=str, default='yolov3.pt', help='initial weights path')
-    parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
-    parser.add_argument('--data', type=str, default='data/coco128.yaml', help='data.yaml path')
+    parser.add_argument('--cfg', type=str, default='my_method_allfree/yolov3_freeanchor_1.yaml', help='model.yaml path')
+    parser.add_argument('--data', type=str, default='data/apollo.yaml', help='data.yaml path')
     parser.add_argument('--hyp', type=str, default='data/hyp.scratch.yaml', help='hyperparameters path')
     parser.add_argument('--epochs', type=int, default=300)
-    parser.add_argument('--batch-size', type=int, default=128, help='total batch size for all GPUs')
-    parser.add_argument('--img-size', nargs='+', type=int, default=[320, 320], help='[train, test] image sizes')
+    parser.add_argument('--batch-size', type=int, default=16, help='total batch size for all GPUs')
+    parser.add_argument('--img-size', nargs='+', type=int, default=[640, 640], help='[train, test] image sizes')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')
     parser.add_argument('--nosave', action='store_true', help='only save final checkpoint')
@@ -433,9 +443,9 @@ if __name__ == '__main__':
     parser.add_argument('--adam', action='store_true', help='use torch.optim.Adam() optimizer')
     parser.add_argument('--sync-bn', action='store_true', help='use SyncBatchNorm, only available in DDP mode')
     parser.add_argument('--local_rank', type=int, default=-1, help='DDP parameter, do not modify')
-    parser.add_argument('--log-imgs', type=int, default=16, help='number of images for W&B logging, max 100')
-    parser.add_argument('--workers', type=int, default=8, help='maximum number of dataloader workers')
-    parser.add_argument('--project', default='runs/train', help='save to project/name')
+    parser.add_argument('--log-imgs', type=int, default=8, help='number of images for W&B logging, max 100')
+    parser.add_argument('--workers', type=int, default=12, help='maximum number of dataloader workers')
+    parser.add_argument('--project', default='end_result_a621/train_allfree_579_bdd100k_ciou', help='save to project/name')
     parser.add_argument('--name', default='exp', help='save to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
     opt = parser.parse_args()
@@ -445,8 +455,8 @@ if __name__ == '__main__':
     opt.world_size = int(os.environ['WORLD_SIZE']) if 'WORLD_SIZE' in os.environ else 1
     opt.global_rank = int(os.environ['RANK']) if 'RANK' in os.environ else -1
     set_logging(opt.global_rank)
-    if opt.global_rank in [-1, 0]:
-        check_git_status()
+    # if opt.global_rank in [-1, 0]:
+    #     check_git_status()
 
     # Resume
     if opt.resume:  # resume an interrupted run

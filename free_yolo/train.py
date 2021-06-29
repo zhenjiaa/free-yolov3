@@ -6,6 +6,8 @@ import time
 from pathlib import Path
 from threading import Thread
 from warnings import warn
+import sys
+sys.path.append('./')
 
 import math
 import numpy as np
@@ -21,15 +23,15 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-import test_  # import test.py to get mAP after each epoch
-from models.yolo import Model
+import test_  as test # import test.py to get mAP after each epoch
+from free_yolo.yolo import Model
 from utils.autoanchor import check_anchors
 from utils.datasets import create_dataloader
 from utils.general import labels_to_class_weights, increment_path, labels_to_image_weights, init_seeds, \
     fitness, strip_optimizer, get_latest_run, check_dataset, check_file, check_git_status, check_img_size, \
     print_mutation, set_logging
 from utils.google_utils import attempt_download
-from utils.loss import compute_loss
+from free_yolo.loss import compute_loss
 from utils.plots import plot_images, plot_labels, plot_results, plot_evolution
 from utils.torch_utils import ModelEMA, select_device, intersect_dicts, torch_distributed_zero_first
 
@@ -89,7 +91,8 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
         logger.info('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
     else:
         model = Model(opt.cfg, ch=3, nc=nc).to(device)  # create
-
+    
+    print(model)
     # Freeze
     freeze = []  # parameter names to freeze (full or partial)
     for k, v in model.named_parameters():
@@ -332,7 +335,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                 ema.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
             final_epoch = epoch + 1 == epochs
             if not opt.notest or final_epoch:  # Calculate mAP
-                results, maps, times = test_.test(opt.data,
+                results, maps, times = test.test(opt.data,
                                                  batch_size=total_batch_size,
                                                  imgsz=imgsz_test,
                                                  model=ema.ema,
@@ -445,8 +448,8 @@ if __name__ == '__main__':
     opt.world_size = int(os.environ['WORLD_SIZE']) if 'WORLD_SIZE' in os.environ else 1
     opt.global_rank = int(os.environ['RANK']) if 'RANK' in os.environ else -1
     set_logging(opt.global_rank)
-    if opt.global_rank in [-1, 0]:
-        check_git_status()
+    # if opt.global_rank in [-1, 0]:
+        # check_git_status()
 
     # Resume
     if opt.resume:  # resume an interrupted run
