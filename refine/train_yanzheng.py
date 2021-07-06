@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from threading import Thread
 from warnings import warn
+import cv2
 
 
 import math
@@ -25,7 +26,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-import test  # import test.py to get mAP after each epoch
+import test_  # import test.py to get mAP after each epoch
 from refine.yolo import  detector, refine_yolo
 from utils.autoanchor import check_anchors
 from utils.datasets import create_dataloader
@@ -271,6 +272,14 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
             pbar = tqdm(pbar, total=nb)  # progress bar
         optimizer.zero_grad()
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
+            
+            
+            # ig = imgs[0].permute(1,2,0).numpy()
+            # print(ig.shape)
+            # cv2.imwrite('yanzheng/1.jpg',ig)
+            # exit()
+
+
             ni = i + nb * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
 
@@ -295,12 +304,14 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
 
             # Forward
             with amp.autocast(enabled=cuda):
+                im = imgs.clone()
                 (detect_res,pred),feature = model(imgs,refine=True)  # forward
-                loss, loss_items = compute_loss(pred, targets.to(device), model)  # loss scaled by batch_size
-                res,boxes = model.detector_(detect_res,feature)
-                model.refine_net = model.refine_net.to(device)
-                res = model.refine_net(res,boxes)
-                compute_loss_refinenet(res,targets.to(device),boxes)
+                loss, loss_items = compute_loss(pred, targets.to(device), model) 
+                if epoch>-1:
+                    res,boxes = model.detector_(detect_res,feature)
+                    model.refine_net = model.refine_net.to(device)
+                    res = model.refine_net(res,boxes)
+                    compute_loss_refinenet(res,targets.to(device),boxes,model)
                 if rank != -1:
                     loss *= opt.world_size  # gradient averaged between devices in DDP mode
 
@@ -347,7 +358,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                 ema.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
             final_epoch = epoch + 1 == epochs
             if not opt.notest or final_epoch:  # Calculate mAP
-                results, maps, times = test.test(opt.data,
+                results, maps, times = test_.test(opt.data,
                                                  batch_size=total_batch_size,
                                                  imgsz=imgsz_test,
                                                  model=ema.ema,
@@ -431,7 +442,7 @@ if __name__ == '__main__':
     parser.add_argument('--data', type=str, default='data/coco128.yaml', help='data.yaml path')
     parser.add_argument('--hyp', type=str, default='data/hyp.scratch.yaml', help='hyperparameters path')
     parser.add_argument('--epochs', type=int, default=300)
-    parser.add_argument('--batch-size', type=int, default=2, help='total batch size for all GPUs')
+    parser.add_argument('--batch-size', type=int, default=8, help='total batch size for all GPUs')
     parser.add_argument('--img-size', nargs='+', type=int, default=[320, 320], help='[train, test] image sizes')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')

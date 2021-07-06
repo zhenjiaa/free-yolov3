@@ -17,6 +17,7 @@ import argparse
 import logging
 import sys
 from copy import deepcopy
+import cv2
 from pathlib import Path
 
 sys.path.append(Path(__file__).parent.parent.absolute().__str__())  # to run '$ python *.py' files in subdirectories
@@ -45,17 +46,18 @@ class refine_head(nn.Module):
         
     def forward(self,x,boxes):
         x = self.m(x)
-        x = x.permute(0,2,3,1)
+        x = x.permute(0,2,3,1)   # b*n*n*5
         # if not self.train:
 
         # evalu ?
-        y = x.sigmoid()
+        if not self.train:
+            y = x.sigmoid()
 
         ###TODO
         # y[..., 0] = (y[..., 0:0] * 2. - 0.5 )*(boxes[:,2]-boxes[:,0])/64   # x
         # y[..., 1] = (y[..., 0:1] * 2. - 0.5 )*(boxes[:,3]-boxes[:,1])/64   # y
 
-        return x
+        return [x]
 
 
 class refine_net(nn.Module):
@@ -67,6 +69,7 @@ class refine_net(nn.Module):
         self.ch = ch
         nc = self.yaml['nc']
         self.rf_model,last_ch = self.parse_model()
+        self.rf_model = self.rf_model
         self.rf_head = refine_head(nc=nc,ch=last_ch,up=torch.tensor(self.forward_compute_s(ch)))
     
     def forward_compute_s(self,ch):
@@ -93,7 +96,7 @@ class refine_net(nn.Module):
                 per_conv = Conv(ch,args[0],args[1],args[2])
                 ch = args[0]
             modellist.append(per_conv)
-        return modellist,ch
+        return nn.Sequential(*modellist),ch
 
 
 class detector():
@@ -111,28 +114,29 @@ class detector():
         
         
         boxes = []
-        for i,pred in enumerate(preds):
-            # pred = pred.int()
-            pred = pred[:,0:4]
-            if pred.shape[0]>100:
-                pred=pred[0:100,:]
-            w = (pred[:,2]-pred[:,0]).unsqueeze(0)
-            h = (pred[:,3]-pred[:,1]).unsqueeze(0)
-            c_y = (pred[:,3]+pred[:,1])/2
-            c_x = (pred[:,2]+pred[:,0])/2
-            wh = torch.cat((w,h),0)
-            wh = torch.max(wh,0)[0]
-            pred[:,3] = (c_y+wh/2).clamp(0,pic_h-1)
-            pred[:,1] = (c_y-wh/2).clamp(0,pic_h-1)
-            pred[:,2] = (c_x+wh/2).clamp(0,pic_w-1)
-            pred[:,0] = (c_x-wh/2).clamp(0,pic_w-1)
-            # pred[]
-            # pred = torch.tensor([[20.,20.,100.,100.]]).to(device)
-            # print(pred.shape)
-            boxes.append(pred)
-
+        for i,pred_ in enumerate(preds):
+            pred = pred_[:,0:4]
+            if pred.shape[0]!=0:
+                print(torch.max(pred_[:,4],0))
+                if pred.shape[0]>100:
+                    pred=pred[0:100,:]
+                w = (pred[:,2]-pred[:,0]).unsqueeze(0)
+                h = (pred[:,3]-pred[:,1]).unsqueeze(0)
+                c_y = (pred[:,3]+pred[:,1])/2
+                c_x = (pred[:,2]+pred[:,0])/2
+                wh = torch.cat((w,h),0)
+                wh = torch.max(wh,0)[0]*2
+                pred[:,3] = (c_y+wh/2).clamp(0,pic_h-1)
+                pred[:,1] = (c_y-wh/2).clamp(0,pic_h-1)
+                pred[:,2] = (c_x+wh/2).clamp(0,pic_w-1)
+                pred[:,0] = (c_x-wh/2).clamp(0,pic_w-1)
+                # pred[]
+                # pred = torch.tensor([[20.,20.,100.,100.]]).to(device)
+                # print(pred.shape)
+            boxes.append(pred.to(device))
+        
         per_fear = ops.roi_align(feature,boxes,[64,64])
-        boxes=torch.cat(boxes,0)
+        # cv2.imwrite('yanzheng/2.jpg',ig)
         return per_fear,boxes
 
 
@@ -153,7 +157,7 @@ if __name__ == '__main__':
     sys.path.append('../')
     parser = argparse.ArgumentParser()
     # parser.add_argument('--cfg', type=str, default='yolov3.yaml', help='model.yaml')
-    parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--device', default='0', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     opt = parser.parse_args()
     # opt.cfg = check_file(opt.cfg)  # check file
     set_logging()
@@ -175,6 +179,7 @@ if __name__ == '__main__':
     #     res = model.refine_net(res)
     # else:
     res,boxes = model.detector_(detect_res,feature)
+    model.refine_net=model.refine_net.to(device)
     res = model.refine_net(res,boxes)
     print(res.shape)
     print(boxes.shape)
