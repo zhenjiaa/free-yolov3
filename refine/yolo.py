@@ -54,8 +54,8 @@ class refine_head(nn.Module):
             y = x.sigmoid()
 
         ###TODO
-        # y[..., 0] = (y[..., 0:0] * 2. - 0.5 )*(boxes[:,2]-boxes[:,0])/64   # x
-        # y[..., 1] = (y[..., 0:1] * 2. - 0.5 )*(boxes[:,3]-boxes[:,1])/64   # y
+            y[..., 0] = (y[...,:0] * 2. - 0.5 )*(boxes[:,2]-boxes[:,0])
+            y[..., 1] = (y[..., 0:1] * 2. - 0.5 )*(boxes[:,3]-boxes[:,1])+boxes[:,1]
 
         return [x]
 
@@ -116,8 +116,8 @@ class detector():
         boxes = []
         for i,pred_ in enumerate(preds):
             pred = pred_[:,0:4]
+            # pred = torch.tensor([[0,160,160,320]]).to(feature.device).float()
             if pred.shape[0]!=0:
-                print(torch.max(pred_[:,4],0))
                 if pred.shape[0]>100:
                     pred=pred[0:100,:]
                 w = (pred[:,2]-pred[:,0]).unsqueeze(0)
@@ -133,9 +133,10 @@ class detector():
                 # pred[]
                 # pred = torch.tensor([[20.,20.,100.,100.]]).to(device)
                 # print(pred.shape)
-            boxes.append(pred.to(device))
-        
-        per_fear = ops.roi_align(feature,boxes,[64,64])
+            boxes.append(pred)
+
+        per_fear = ops.roi_align(feature,boxes,[320,320])
+        # ig = per_fear[0].permute(1,2,0).numpy()
         # cv2.imwrite('yanzheng/2.jpg',ig)
         return per_fear,boxes
 
@@ -157,7 +158,7 @@ if __name__ == '__main__':
     sys.path.append('../')
     parser = argparse.ArgumentParser()
     # parser.add_argument('--cfg', type=str, default='yolov3.yaml', help='model.yaml')
-    parser.add_argument('--device', default='0', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     opt = parser.parse_args()
     # opt.cfg = check_file(opt.cfg)  # check file
     set_logging()
@@ -172,17 +173,21 @@ if __name__ == '__main__':
     model.train()
     # print(model)
     x = torch.rand((8,3,32,32)).to(device)
+    x = cv2.imread('/home/zhenjia/lzj/DATA/coco128/images/train2017/000000000025.jpg')
+    x = torch.tensor(cv2.resize(x,(320,320))).to(device)
+    x = x.permute(2,0,1).unsqueeze(0).float()
     (detect_res,pred),feature = model(x,refine=True)
-    res,boxes = model.detector_(detect_res,feature)
+    res,boxes = model.detector_(detect_res,[x])
     # if model.training:
     #     res,_ = model.detector_(detect_res,feature)
     #     res = model.refine_net(res)
     # else:
+    exit()
     res,boxes = model.detector_(detect_res,feature)
     model.refine_net=model.refine_net.to(device)
     res = model.refine_net(res,boxes)
-    print(res.shape)
-    print(boxes.shape)
+    # print(res.shape)
+    # print(boxes.shape)
 
 
 

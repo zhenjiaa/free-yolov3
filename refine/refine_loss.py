@@ -92,10 +92,7 @@ def compute_loss_refinenet(p,targets,boxes,model):
             nt += n  # cumulative targets
             ps = pi[b, gj, gi]  # prediction subset corresponding to targets
 
-
             # Regression
-            
-            # print(ps.shape)
             if True:
                 pxy = ps[:, :2].sigmoid() * 2. - 0.5
                 # print(pi.shape)
