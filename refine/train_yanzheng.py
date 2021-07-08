@@ -26,7 +26,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-import test_  # import test.py to get mAP after each epoch
+import refine.refine_test as test_  # import test.py to get mAP after each epoch
 from refine.yolo import  detector, refine_yolo
 from utils.autoanchor import check_anchors
 from utils.datasets import create_dataloader
@@ -89,9 +89,8 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
             ckpt['model'].yaml['anchors'] = round(hyp['anchors'])  # force autoanchor
 
         detector_args={}
-        detector_args['conf_thres']=0.00001
+        detector_args['conf_thres']=0.1
         detector_args['iou_thres']=0.6
-        detector_args['classes']=1
         model = refine_yolo(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc,detector_args=detector_args).to(device)  # create
         exclude = ['anchor'] if opt.cfg or hyp.get('anchors') else []  # exclude keys
         state_dict = ckpt['model'].float().state_dict()  # to FP32
@@ -194,7 +193,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
 
     # Trainloader
     dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
-                                            hyp=hyp, augment=True, cache=opt.cache_images, rect=opt.rect, rank=rank,
+                                            hyp=hyp, augment=False, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                             world_size=opt.world_size, workers=opt.workers,
                                             image_weights=opt.image_weights)
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
@@ -305,17 +304,20 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
             # Forward
             with amp.autocast(enabled=cuda):
                 im = imgs.clone()
+                torch.autograd.set_detect_anomaly(True)
                 (detect_res,pred),feature = model(imgs,refine=True)  # forward
                 loss, loss_items = compute_loss(pred, targets.to(device), model) 
                 if epoch>-1:
-                    res,boxes = model.detector_(detect_res,feature)
-                    model.refine_net = model.refine_net.to(device)
-                    res = model.refine_net(res,boxes)
-                    compute_loss_refinenet(res,targets.to(device),boxes,model)
+                    res,boxes = model.detector_(detect_res,[im])
+                    # model.refine_net = model.refine_net.to(device)
+                    # res = model.refine_net(res,boxes)
+                    # refine_loss, refine_loss_items = compute_loss_refinenet(res,targets.to(device),boxes,model)
+                # loss +=refine_loss 
                 if rank != -1:
                     loss *= opt.world_size  # gradient averaged between devices in DDP mode
 
             # Backward
+            # with torch.autograd.detect_anomaly():
             scaler.scale(loss).backward()
 
             # Optimize
@@ -442,7 +444,7 @@ if __name__ == '__main__':
     parser.add_argument('--data', type=str, default='data/coco128.yaml', help='data.yaml path')
     parser.add_argument('--hyp', type=str, default='data/hyp.scratch.yaml', help='hyperparameters path')
     parser.add_argument('--epochs', type=int, default=300)
-    parser.add_argument('--batch-size', type=int, default=4, help='total batch size for all GPUs')
+    parser.add_argument('--batch-size', type=int, default=2, help='total batch size for all GPUs')
     parser.add_argument('--img-size', nargs='+', type=int, default=[320, 320], help='[train, test] image sizes')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')
@@ -453,7 +455,7 @@ if __name__ == '__main__':
     parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
     parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
     parser.add_argument('--image-weights', action='store_true', help='use weighted image selection for training')
-    parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--device', default='0', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--multi-scale', action='store_true', help='vary img-size +/- 50%%')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
     parser.add_argument('--adam', action='store_true', help='use torch.optim.Adam() optimizer')

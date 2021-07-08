@@ -88,9 +88,8 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
             ckpt['model'].yaml['anchors'] = round(hyp['anchors'])  # force autoanchor
 
         detector_args={}
-        detector_args['conf_thres']=0.00001
+        detector_args['conf_thres']=0.1
         detector_args['iou_thres']=0.6
-        detector_args['classes']=1
         model = refine_yolo(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc,detector_args=detector_args).to(device)  # create
         exclude = ['anchor'] if opt.cfg or hyp.get('anchors') else []  # exclude keys
         state_dict = ckpt['model'].float().state_dict()  # to FP32
@@ -297,10 +296,13 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
             with amp.autocast(enabled=cuda):
                 (detect_res,pred),feature = model(imgs,refine=True)  # forward
                 loss, loss_items = compute_loss(pred, targets.to(device), model)  # loss scaled by batch_size
-                res,boxes = model.detector_(detect_res,feature)
-                model.refine_net = model.refine_net.to(device)
-                res = model.refine_net(res,boxes)
-                compute_loss_refinenet(res,targets.to(device),boxes)
+                if epoch>50:
+                    res,boxes = model.detector_(detect_res,feature)
+                    model.refine_net = model.refine_net.to(device)
+                    res = model.refine_net(res,boxes)
+                    refine_loss, refine_loss_items=compute_loss_refinenet(res,targets.to(device),boxes,model)
+                    loss +=refine_loss
+
                 if rank != -1:
                     loss *= opt.world_size  # gradient averaged between devices in DDP mode
 
@@ -431,7 +433,7 @@ if __name__ == '__main__':
     parser.add_argument('--data', type=str, default='data/coco128.yaml', help='data.yaml path')
     parser.add_argument('--hyp', type=str, default='data/hyp.scratch.yaml', help='hyperparameters path')
     parser.add_argument('--epochs', type=int, default=300)
-    parser.add_argument('--batch-size', type=int, default=2, help='total batch size for all GPUs')
+    parser.add_argument('--batch-size', type=int, default=8, help='total batch size for all GPUs')
     parser.add_argument('--img-size', nargs='+', type=int, default=[320, 320], help='[train, test] image sizes')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')

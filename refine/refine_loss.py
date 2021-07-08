@@ -156,7 +156,7 @@ def build_targets_forbatch(feature_size,target,bboxes):
             im_target = im_target[torch.max(im_target[...,2:3],1)[0]<=1]
             all_batch_target.append((im_target))
             BOX_COUNT+=len(bbox)
-            print(im_target.shape)
+            # print(im_target.shape)
     all_batch_target=torch.cat(all_batch_target,0)
     return all_batch_target
 

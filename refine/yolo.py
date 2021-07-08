@@ -17,7 +17,9 @@ import argparse
 import logging
 import sys
 from copy import deepcopy
+
 import cv2
+import time
 from pathlib import Path
 
 sys.path.append(Path(__file__).parent.parent.absolute().__str__())  # to run '$ python *.py' files in subdirectories
@@ -54,10 +56,11 @@ class refine_head(nn.Module):
             y = x.sigmoid()
 
         ###TODO
-            y[..., 0] = (y[...,:0] * 2. - 0.5 )*(boxes[:,2]-boxes[:,0])
+            y[..., 0] = (y[...,:0] * 2. - 0.5 )*(boxes[:,2]-boxes[:,0])+boxes[:,0]
             y[..., 1] = (y[..., 0:1] * 2. - 0.5 )*(boxes[:,3]-boxes[:,1])+boxes[:,1]
-
-        return [x]
+            y[..., 2] = (y[..., 2])*2*(boxes[:,2]-boxes[:,0])
+            y[..., 3] = (y[..., 3])*2*(boxes[:,3]-boxes[:,1])
+        return [x] if self.train else y
 
 
 class refine_net(nn.Module):
@@ -83,7 +86,7 @@ class refine_net(nn.Module):
         # print(self.rf_model)
         # exit()
         for i,layer in enumerate(self.rf_model):
-            print('xxx')
+            # print('xxx')
             x = layer(x)
         x = self.rf_head(x,boxes)
         return x
@@ -103,41 +106,47 @@ class detector():
     def __init__(self,detector_args) -> None:
         self.conf_thres = detector_args['conf_thres']
         self.iou_thres = detector_args['iou_thres']
-        self.classes = detector_args['classes']
     
-    def __call__(self,pred,feature):
+    def __call__(self,pred__,feature):
         # detections with shape: nx6 (x1, y1, x2, y2, conf, cls)
         # bs = len(pr)
+        # ig = (feature[0][0].permute(1,2,0).cpu().detach().numpy()*255).astype(np.int)
+        # im_name  = str(time.time())+'.jpg'
+        # cv2.imwrite('yanzheng/'+im_name,ig)
         feature=feature[0]
-        preds = non_max_suppression(pred, self.conf_thres, self.iou_thres, classes=self.classes)
+        preds = non_max_suppression(pred__, self.conf_thres, self.iou_thres, classes=None)
         pic_w,pic_h = feature.shape[2],feature.shape[3]
         
         
         boxes = []
         for i,pred_ in enumerate(preds):
+            # print(torch.max(pred_[:,4]),pred_[0,4:])
             pred = pred_[:,0:4]
+            if pred.shape[0]>20:
+                pred=pred[0:20,:]
             # pred = torch.tensor([[0,160,160,320]]).to(feature.device).float()
+            prd = torch.zeros_like(pred).to(feature.device)
             if pred.shape[0]!=0:
-                if pred.shape[0]>100:
-                    pred=pred[0:100,:]
                 w = (pred[:,2]-pred[:,0]).unsqueeze(0)
                 h = (pred[:,3]-pred[:,1]).unsqueeze(0)
                 c_y = (pred[:,3]+pred[:,1])/2
                 c_x = (pred[:,2]+pred[:,0])/2
                 wh = torch.cat((w,h),0)
                 wh = torch.max(wh,0)[0]*2
-                pred[:,3] = (c_y+wh/2).clamp(0,pic_h-1)
-                pred[:,1] = (c_y-wh/2).clamp(0,pic_h-1)
-                pred[:,2] = (c_x+wh/2).clamp(0,pic_w-1)
-                pred[:,0] = (c_x-wh/2).clamp(0,pic_w-1)
+                prd[:,3] = (c_y+wh/2).clamp(0,pic_h-1)
+                prd[:,1] = (c_y-wh/2).clamp(0,pic_h-1)
+                prd[:,2] = (c_x+wh/2).clamp(0,pic_w-1)
+                prd[:,0] = (c_x-wh/2).clamp(0,pic_w-1)
+
                 # pred[]
                 # pred = torch.tensor([[20.,20.,100.,100.]]).to(device)
                 # print(pred.shape)
-            boxes.append(pred)
+            boxes.append(prd)
 
         per_fear = ops.roi_align(feature,boxes,[320,320])
-        # ig = per_fear[0].permute(1,2,0).numpy()
-        # cv2.imwrite('yanzheng/2.jpg',ig)
+        # ig = (per_fear[0].permute(1,2,0).cpu().detach().numpy()*255).astype(np.int)
+        # im_name  = str(time.time())+'.jpg'
+        # cv2.imwrite('yanzheng/'+im_name,ig)
         return per_fear,boxes
 
 
@@ -168,12 +177,11 @@ if __name__ == '__main__':
     detector_args={}
     detector_args['conf_thres']=0.00001
     detector_args['iou_thres']=0.6
-    detector_args['classes']=1
     model = refine_yolo('models/yolov3.yaml',detector_args=detector_args).to(device)
     model.train()
     # print(model)
     x = torch.rand((8,3,32,32)).to(device)
-    x = cv2.imread('/home/zhenjia/lzj/DATA/coco128/images/train2017/000000000025.jpg')
+    x = cv2.imread('/data1/paper_/test/free-yolov3/coco128/images/train2017/000000000009.jpg')
     x = torch.tensor(cv2.resize(x,(320,320))).to(device)
     x = x.permute(2,0,1).unsqueeze(0).float()
     (detect_res,pred),feature = model(x,refine=True)
@@ -182,7 +190,7 @@ if __name__ == '__main__':
     #     res,_ = model.detector_(detect_res,feature)
     #     res = model.refine_net(res)
     # else:
-    exit()
+    # exit()
     res,boxes = model.detector_(detect_res,feature)
     model.refine_net=model.refine_net.to(device)
     res = model.refine_net(res,boxes)
