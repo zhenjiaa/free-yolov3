@@ -308,7 +308,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                 (detect_res,pred),feature = model(imgs,refine=True)  # forward
                 loss, loss_items = compute_loss(pred, targets.to(device), model) 
                 if epoch>-1:
-                    res,boxes = model.detector_(detect_res,[im])
+                    res,boxes = model.detector_(detect_res,feature)
                     # model.refine_net = model.refine_net.to(device)
                     # res = model.refine_net(res,boxes)
                     # refine_loss, refine_loss_items = compute_loss_refinenet(res,targets.to(device),boxes,model)

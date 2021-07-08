@@ -370,6 +370,7 @@ def non_max_suppression_refine(prediction, conf_thres=0.1, iou_thres=0.6, classe
         # Apply constraints
         # x[((x[..., 2:4] < min_wh) | (x[..., 2:4] > max_wh)).any(1), 4] = 0  # width-height
         x = x[xc[xi]]  # confidence
+        x = x.detach()
         # print(torch.max(x[:,4]),'xxx')
 
         # Cat apriori labels if autolabelling

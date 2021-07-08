@@ -113,7 +113,6 @@ def test(data,
             # Compute loss
             # if training:
             #     loss += compute_loss([x.float() for x in train_out], targets, model)[1][:3]  # box, obj, cls
-            print(device)
             # res,boxes = model.detector_(inf_out,feature)
             # model.refine_net = model.refine_net.to(device)
             # res = model.refine_net(res,boxes)

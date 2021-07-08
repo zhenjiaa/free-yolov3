@@ -59,7 +59,7 @@ def compute_loss_refinenet(p,targets,boxes,model):
     device = targets.device
     all_batch_target = build_targets_forbatch([320,320],targets,boxes)
     b_boxes = torch.cat(boxes,0)
-    indices,tbox,tcls = build_targets_forlayer(p, targets)
+    indices,tbox,tcls = build_targets_forlayer(p, all_batch_target)
     
     bs = p[0][...,0].shape[0]
     
@@ -96,7 +96,7 @@ def compute_loss_refinenet(p,targets,boxes,model):
             if True:
                 pxy = ps[:, :2].sigmoid() * 2. - 0.5
                 # print(pi.shape)
-                pwh = (ps[:, 2:4].sigmoid()*2).to(device)
+                pwh = (ps[:, 2:4].sigmoid()*torch.tensor([20,20])).to(device)
                 pbox = torch.cat((pxy, pwh), 1).to(device)  # predicted box
                 # iou = bbox_iou(pbox.T, tbox[i], x1y1x2y2=False, DIoU=True,CIoU=True)  # iou(prediction, target)
                 iou = bbox_iou(pbox.T, tbox[i], x1y1x2y2=False,CIoU=True)  # iou(prediction, target)
@@ -135,26 +135,33 @@ def compute_loss_refinenet(p,targets,boxes,model):
 def build_targets_forbatch(feature_size,target,bboxes):
     batch_size = len(bboxes)
     all_batch_target = []
+    BOX_COUNT = 0
+
     for j in range(batch_size):
-        BOX_COUNT = 0
         im_target = target[target[:,0]==j]
         nt = im_target.shape[0]
-        if nt:
-            bbox = bboxes[j]
+        bbox = bboxes[j]
+        if nt and len(bbox):
+            im_target = im_target.detach()
             im_target[:,2] = im_target[:,2]*feature_size[0]
             im_target[:,3] = im_target[:,3]*feature_size[1]
             im_target[:,4] = im_target[:,4]*feature_size[0]
             im_target[:,5] = im_target[:,5]*feature_size[1]
-            im_target = im_target.repeat(len(bbox),1)
+            # im_target = im_target.repeat(len(bbox),1)
+            im_target_res = torch.zeros_like(im_target).repeat(len(bbox),1)
+            
             for i in range(len(bbox)):
-                im_target[(i)*nt:(i+1)*nt,2] = (im_target[(i)*nt:(i+1)*nt,2]-bbox[i][0])/(bbox[i][3]-bbox[i][1])
-                im_target[(i)*nt:(i+1)*nt,3] = (im_target[(i)*nt:(i+1)*nt,3]-bbox[i][1])/(bbox[i][3]-bbox[i][1])
-                im_target[(i)*nt:(i+1)*nt,4] = im_target[(i)*nt:(i+1)*nt,4]/(bbox[i][2]-bbox[i][0])
-                im_target[(i)*nt:(i+1)*nt,5] = im_target[(i)*nt:(i+1)*nt,5]/(bbox[i][3]-bbox[i][1])
-                im_target[(i)*nt:(i+1)*nt,0]=i+BOX_COUNT
-            im_target = im_target[torch.min(im_target[...,2:3],1)[0]>=0]
-            im_target = im_target[torch.max(im_target[...,2:3],1)[0]<=1]
-            all_batch_target.append((im_target))
+                im_target_res[(i)*nt:(i+1)*nt,2] = (im_target[:,2]-bbox[i][0])/(bbox[i][2]-bbox[i][0])
+                im_target_res[(i)*nt:(i+1)*nt,3] = (im_target[:,3]-bbox[i][1])/(bbox[i][3]-bbox[i][1])
+                im_target_res[(i)*nt:(i+1)*nt,4] = im_target[:,4]/(bbox[i][2]-bbox[i][0])
+                im_target_res[(i)*nt:(i+1)*nt,5] = im_target[:,5]/(bbox[i][3]-bbox[i][1])
+                im_target_res[(i)*nt:(i+1)*nt,1] = im_target[:,1]
+                im_target_res[(i)*nt:(i+1)*nt,0]=i+BOX_COUNT
+            min_ = torch.min(im_target_res[...,2:3],1)[0]>=0    
+            im_target_res = im_target_res[torch.min(im_target_res[...,2:4],1)[0]>=0]
+            im_target_res = im_target_res[torch.max(im_target_res[...,2:4],1)[0]<=1]
+            im_target_res = im_target_res[torch.max(im_target_res[...,4:6],1)[0]<=1]
+            all_batch_target.append((im_target_res))
             BOX_COUNT+=len(bbox)
             # print(im_target.shape)
     all_batch_target=torch.cat(all_batch_target,0)

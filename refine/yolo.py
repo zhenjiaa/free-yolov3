@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 from models.common import Conv, Bottleneck, SPP, DWConv, Focus, BottleneckCSP, Concat, NMS, autoShape
 from models.experimental import MixConv2d, CrossConv, C3
 from utils.autoanchor import check_anchor_order
-from utils.general import make_divisible, check_file, set_logging,non_max_suppression
+from utils.general import make_divisible, check_file, set_logging,non_max_suppression_refine
 from utils.torch_utils import time_synchronized, fuse_conv_and_bn, model_info, scale_img, initialize_weights, \
     select_device, copy_attr
 try:
@@ -114,7 +114,7 @@ class detector():
         # im_name  = str(time.time())+'.jpg'
         # cv2.imwrite('yanzheng/'+im_name,ig)
         feature=feature[0]
-        preds = non_max_suppression(pred__, self.conf_thres, self.iou_thres, classes=None)
+        preds = non_max_suppression_refine(pred__, self.conf_thres, self.iou_thres, classes=None)
         pic_w,pic_h = feature.shape[2],feature.shape[3]
         
         
@@ -145,7 +145,7 @@ class detector():
 
         per_fear = ops.roi_align(feature,boxes,[320,320])
         # ig = (per_fear[0].permute(1,2,0).cpu().detach().numpy()*255).astype(np.int)
-        # im_name  = str(time.time())+'.jpg'
+        # im_name  = +'.jpg'
         # cv2.imwrite('yanzheng/'+im_name,ig)
         return per_fear,boxes
 

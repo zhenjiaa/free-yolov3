@@ -25,7 +25,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-import test  # import test.py to get mAP after each epoch
+import refine_test as test_  # import test.py to get mAP after each epoch
 from refine.yolo import  detector, refine_yolo
 from utils.autoanchor import check_anchors
 from utils.datasets import create_dataloader
@@ -294,9 +294,10 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
 
             # Forward
             with amp.autocast(enabled=cuda):
+                torch.autograd.set_detect_anomaly(True)
                 (detect_res,pred),feature = model(imgs,refine=True)  # forward
                 loss, loss_items = compute_loss(pred, targets.to(device), model)  # loss scaled by batch_size
-                if epoch>50:
+                if epoch>40:
                     res,boxes = model.detector_(detect_res,feature)
                     model.refine_net = model.refine_net.to(device)
                     res = model.refine_net(res,boxes)
@@ -349,7 +350,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                 ema.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
             final_epoch = epoch + 1 == epochs
             if not opt.notest or final_epoch:  # Calculate mAP
-                results, maps, times = test.test(opt.data,
+                results, maps, times = test_.test(opt.data,
                                                  batch_size=total_batch_size,
                                                  imgsz=imgsz_test,
                                                  model=ema.ema,
