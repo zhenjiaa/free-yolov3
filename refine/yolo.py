@@ -1,9 +1,11 @@
 
+from pickle import TRUE
 import sys
 import numpy as np
 from torch.nn.functional import upsample
 
 from torch.nn.modules import conv
+import torchvision
 sys.path.append('./')
 from torch.cuda import init
 from models.yolo import Model
@@ -46,25 +48,50 @@ class refine_head(nn.Module):
         self.m = nn.Conv2d(ch,self.no,1) # output conv
         self.upsample = up
         
-    def forward(self,x,boxes):
+    def forward(self,x,boxes,train=True):
         x = self.m(x)
-        x = x.permute(0,2,3,1)   # b*n*n*5
+        bs, _, ny, nx = x.shape
+        x = x.permute(0,2,3,1).contiguous()   # b*n*n*5
         # if not self.train:
 
-        # evalu ?
+        
+       
+        # 
+
+        # ###TODO
+        if not train:
+            print('xxx',x.shape)
+            boxes = boxes[0]
+            num_b = boxes.shape[1]
+            y = x.sigmoid()
+            self.grid = self._make_grid(nx, ny).to(x.device)
+            y[..., 0:2] = ((y[...,0:2] * 2. - 0.5 )+ self.grid).to(x.device)
+            y[..., 0] = y[...,0]*(boxes[:,2]-boxes[:,0]).view(-1,1,1)+boxes[:,0].view(-1,1,1)
+            y[..., 1] = y[...,1]*(boxes[:,3]-boxes[:,1]).view(-1,1,1)+boxes[:,1].view(-1,1,1)
+            y[..., 2] = (y[..., 2])*2*(boxes[:,2]-boxes[:,0]).view(-1,1,1)
+            y[..., 3] = (y[..., 3])*2*(boxes[:,3]-boxes[:,1]).view(-1,1,1)
+            # y[..., 4] = torch.ones_like(y[..., 4]).to(x.device)
+            return y
+
         if not self.train:
             y = x.sigmoid()
 
         ###TODO
-            y[..., 0] = (y[...,:0] * 2. - 0.5 )*(boxes[:,2]-boxes[:,0])+boxes[:,0]
+            y[..., 0] = (y[...,0] * 2. - 0.5 )*(boxes[:,2]-boxes[:,0])+boxes[:,0]
             y[..., 1] = (y[..., 0:1] * 2. - 0.5 )*(boxes[:,3]-boxes[:,1])+boxes[:,1]
             y[..., 2] = (y[..., 2])*2*(boxes[:,2]-boxes[:,0])
             y[..., 3] = (y[..., 3])*2*(boxes[:,3]-boxes[:,1])
         return [x] if self.train else y
 
 
+    @staticmethod
+    def _make_grid(nx=20, ny=20):
+        yv, xv = torch.meshgrid([torch.arange(ny), torch.arange(nx)])
+        return torch.stack((xv, yv), 2).view((1, ny, nx, 2)).float()
+
+
 class refine_net(nn.Module):
-    def __init__(self,cfg='models/yolov3.yaml',ch=32):
+    def __init__(self,cfg,ch=32):
         super(refine_net, self).__init__()
         with open(cfg) as f:
             import yaml
@@ -73,6 +100,7 @@ class refine_net(nn.Module):
         nc = self.yaml['nc']
         self.rf_model,last_ch = self.parse_model()
         self.rf_model = self.rf_model
+        print(nc)
         self.rf_head = refine_head(nc=nc,ch=last_ch,up=torch.tensor(self.forward_compute_s(ch)))
     
     def forward_compute_s(self,ch):
@@ -82,13 +110,13 @@ class refine_net(nn.Module):
             x = layer(x)
         return z/x.shape[-1]
     
-    def forward(self,x,boxes=[]):
+    def forward(self,x,boxes=[],train=True):
         # print(self.rf_model)
         # exit()
         for i,layer in enumerate(self.rf_model):
             # print('xxx')
             x = layer(x)
-        x = self.rf_head(x,boxes)
+        x = self.rf_head(x,boxes,train)
         return x
     
     def parse_model(self):
@@ -115,6 +143,7 @@ class detector():
         # cv2.imwrite('yanzheng/'+im_name,ig)
         feature=feature[0]
         preds = non_max_suppression_refine(pred__, self.conf_thres, self.iou_thres, classes=None)
+        # print(self.conf_thres, self.iou_thres)
         pic_w,pic_h = feature.shape[2],feature.shape[3]
         
         
@@ -143,7 +172,7 @@ class detector():
                 # print(pred.shape)
             boxes.append(prd)
 
-        per_fear = ops.roi_align(feature,boxes,[320,320])
+        per_fear = ops.roi_align(feature,boxes,[32,32])
         # ig = (per_fear[0].permute(1,2,0).cpu().detach().numpy()*255).astype(np.int)
         # im_name  = +'.jpg'
         # cv2.imwrite('yanzheng/'+im_name,ig)
@@ -152,9 +181,9 @@ class detector():
 
 class refine_yolo(Model):
     def __init__(self, cfg='yolov3.yaml', ch=3, nc=None ,detector_args=None): 
-        Model.__init__(self, cfg, ch=3, nc=nc)
+        Model.__init__(self, cfg, ch, nc=nc)
         # self.get_
-        self.refine_net = refine_net()
+        self.refine_net = refine_net(cfg,ch=32)
         self.detector_ = detector(detector_args)
 
    

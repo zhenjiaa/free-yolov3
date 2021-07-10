@@ -96,7 +96,7 @@ def compute_loss_refinenet(p,targets,boxes,model):
             if True:
                 pxy = ps[:, :2].sigmoid() * 2. - 0.5
                 # print(pi.shape)
-                pwh = (ps[:, 2:4].sigmoid()*torch.tensor([20,20])).to(device)
+                pwh = (ps[:, 2:4].sigmoid()*torch.tensor([2,2]).to(device)).to(device)
                 pbox = torch.cat((pxy, pwh), 1).to(device)  # predicted box
                 # iou = bbox_iou(pbox.T, tbox[i], x1y1x2y2=False, DIoU=True,CIoU=True)  # iou(prediction, target)
                 iou = bbox_iou(pbox.T, tbox[i], x1y1x2y2=False,CIoU=True)  # iou(prediction, target)
@@ -104,6 +104,7 @@ def compute_loss_refinenet(p,targets,boxes,model):
 
             # Objectness
             tobj[b, gj, gi] = (1.0 - model.gr) + model.gr * iou.detach().clamp(0).type(tobj.dtype)  # iou ratio
+            print(torch.max(tobj),torch.max(pi[..., 4]))
 
             # Classification
             if model.nc > 1:  # cls loss (only if multiple classes)
@@ -120,7 +121,7 @@ def compute_loss_refinenet(p,targets,boxes,model):
     bs = tobj.shape[0]  # batch size
     # else:
     loss = lbox +lobj+lcls
-        # loss = loss*3
+    loss = loss*0.01
     return loss * bs, torch.cat((lbox, lobj, lcls, loss)).detach()
 
 
@@ -159,8 +160,10 @@ def build_targets_forbatch(feature_size,target,bboxes):
                 im_target_res[(i)*nt:(i+1)*nt,0]=i+BOX_COUNT
             min_ = torch.min(im_target_res[...,2:3],1)[0]>=0    
             im_target_res = im_target_res[torch.min(im_target_res[...,2:4],1)[0]>=0]
-            im_target_res = im_target_res[torch.max(im_target_res[...,2:4],1)[0]<=1]
-            im_target_res = im_target_res[torch.max(im_target_res[...,4:6],1)[0]<=1]
+            if im_target_res.shape[0]>0:
+                im_target_res = im_target_res[torch.max(im_target_res[...,2:4],1)[0]<=1]
+            if im_target_res.shape[0]>0:
+                im_target_res = im_target_res[torch.max(im_target_res[...,4:6],1)[0]<=1]
             all_batch_target.append((im_target_res))
             BOX_COUNT+=len(bbox)
             # print(im_target.shape)
