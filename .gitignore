@@ -252,5 +252,5 @@ crashlytics-build.properties
 fabric.properties
 
 
-.ccpd/
-.runs_ccpd/
+ccpd/
+runs_ccpd/
