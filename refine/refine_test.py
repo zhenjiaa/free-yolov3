@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 from threading import Thread
+import sys
+sys.path.append('./')
 
 import numpy as np
 import torch
@@ -36,7 +38,8 @@ def test(data,
          save_txt=False,  # for auto-labelling
          save_conf=False,
          plots=True,
-         log_imgs=0):  # number of logged images
+         log_imgs=0,
+         refine=False):  # number of logged images
 
     # Initialize/load model and set device
     training = model is not None
@@ -61,7 +64,8 @@ def test(data,
         #     model = nn.DataParallel(model)
 
     # Half
-    half = device.type != 'cpu'  # half precision only supported on CUDA
+    # half = device.type != 'cpu'  # half precision only supported on CUDA
+    half = False
     if half:
         model.half()
 
@@ -107,9 +111,17 @@ def test(data,
         with torch.no_grad():
             # Run model
             t = time_synchronized()
-            (inf_out, train_out),feature = model(img, refine=True)  # inference and training outputs
-            t0 += time_synchronized() - t
+            (inf_out, _),feature = model(img, refine=True)  # inference and training outputs
 
+            
+            # if len(boxes)!=res.shape[0]:
+            #     new_res = []
+            #     for bbox in boxes:
+            #         len_bb = bbox.shape[0]
+            #         print(res[c:c+len_bb,...].view(1,-1,res.shape[-1]).shape)
+            #         new_res.append(res[c:c+len_bb,...].view(1,-1,res.shape[-1]))
+            #         c = c+len_bb
+            #     res = torch.cat(new_res,0)
             # Compute loss
             # if training:
             #     loss += compute_loss([x.float() for x in train_out], targets, model)[1][:3]  # box, obj, cls
@@ -123,7 +135,30 @@ def test(data,
             targets[:, 2:] *= torch.Tensor([width, height, width, height]).to(device)  # to pixels
             lb = [targets[targets[:, 0] == i, 1:] for i in range(nb)] if save_txt else []  # for autolabelling
             t = time_synchronized()
-            output = non_max_suppression(inf_out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb)
+            if refine:
+                res,boxes = model.detector_(inf_out,feature)
+                model.refine_net = model.refine_net.to(device)
+                res = model.refine_net(res,boxes,eval=True)
+                t0 += time_synchronized() - t
+                output = non_max_suppression(res, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb)
+                c = 0
+                if len(boxes)!=res.shape[0]:
+                    new_res = []
+                    for bbox in boxes:
+                        len_bb = bbox.shape[0]
+                        if len_bb==0:
+                            len_bb=1
+                        if len_bb!=1:
+                            # print(torch.cat(output[c:c+len_bb],0).shape)
+                            a = torch.cat(output[c:c+len_bb],0)
+                        else:
+                            a = output[c]
+                        new_res.append(a)
+                        c = c+len_bb
+                    output = new_res
+            else:
+                output = non_max_suppression(inf_out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb)
+
             t1 += time_synchronized() - t
 
         # Statistics per image
@@ -286,9 +321,9 @@ def test(data,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='test.py')
-    parser.add_argument('--weights', nargs='+', type=str, default='yolov3.pt', help='model.pt path(s)')
-    parser.add_argument('--data', type=str, default='data/coco128.yaml', help='*.data path')
-    parser.add_argument('--batch-size', type=int, default=128, help='size of each image batch')
+    parser.add_argument('--weights', nargs='+', type=str, default='runs_ccpd/refine_yolov3_valastrain/exp4/weights/last.pt', help='model.pt path(s)')
+    parser.add_argument('--data', type=str, default='ccpd/cfg/ccpd_valastrain.yaml', help='*.data path')
+    parser.add_argument('--batch-size', type=int, default=8, help='size of each image batch')
     parser.add_argument('--img-size', type=int, default=320, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.001, help='object confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.6, help='IOU threshold for NMS')
@@ -321,6 +356,7 @@ if __name__ == '__main__':
              opt.verbose,
              save_txt=opt.save_txt,
              save_conf=opt.save_conf,
+             refine =True
              )
 
     elif opt.task == 'study':  # run over a range of settings and save/plot

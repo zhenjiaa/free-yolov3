@@ -437,6 +437,7 @@ def non_max_suppression_refine(prediction, conf_thres=0.1, iou_thres=0.6, classe
     return output
 
 
+
 def strip_optimizer(f='weights/best.pt', s=''):  # from utils.general import *; strip_optimizer()
     # Strip optimizer from 'f' to finalize training, optionally save as 's'
     x = torch.load(f, map_location=torch.device('cpu'))

@@ -1,6 +1,8 @@
 
 from pickle import TRUE
+import re
 import sys
+from matplotlib.pyplot import box
 import numpy as np
 from torch.nn.functional import upsample
 
@@ -48,7 +50,7 @@ class refine_head(nn.Module):
         self.m = nn.Conv2d(ch,self.no,1) # output conv
         self.upsample = up
         
-    def forward(self,x,boxes,train=True):
+    def forward(self,x,boxes,train=True,eval=False):
         x = self.m(x)
         bs, _, ny, nx = x.shape
         x = x.permute(0,2,3,1).contiguous()   # b*n*n*5
@@ -60,27 +62,34 @@ class refine_head(nn.Module):
 
         # ###TODO
         if not train:
-            print('xxx',x.shape)
             boxes = boxes[0]
-            num_b = boxes.shape[1]
             y = x.sigmoid()
             self.grid = self._make_grid(nx, ny).to(x.device)
             y[..., 0:2] = ((y[...,0:2] * 2. - 0.5 )+ self.grid).to(x.device)
-            y[..., 0] = y[...,0]*(boxes[:,2]-boxes[:,0]).view(-1,1,1)+boxes[:,0].view(-1,1,1)
-            y[..., 1] = y[...,1]*(boxes[:,3]-boxes[:,1]).view(-1,1,1)+boxes[:,1].view(-1,1,1)
-            y[..., 2] = (y[..., 2])*2*(boxes[:,2]-boxes[:,0]).view(-1,1,1)
-            y[..., 3] = (y[..., 3])*2*(boxes[:,3]-boxes[:,1]).view(-1,1,1)
+            
+            y[..., 0] = y[...,0]*(boxes[:,2]-boxes[:,0]).view(-1,1,1)/2+boxes[:,0].view(-1,1,1)
+            y[..., 1] = y[...,1]*(boxes[:,3]-boxes[:,1]).view(-1,1,1)/2+boxes[:,1].view(-1,1,1)
+            y[..., 2] = (y[..., 2])*(boxes[:,2]-boxes[:,0]).view(-1,1,1)
+            y[..., 3] = (y[..., 3])*(boxes[:,3]-boxes[:,1]).view(-1,1,1)
+            y = y.contiguous().view(bs,-1,y.shape[-1])
             # y[..., 4] = torch.ones_like(y[..., 4]).to(x.device)
             return y
-
-        if not self.train:
+        if eval:
+            boxes_ = torch.cat(boxes,0)
+            # num_b = boxes_.shape[1]
             y = x.sigmoid()
+            self.grid = self._make_grid(nx, ny).to(x.device)
+            y[..., 0:2] = ((y[...,0:2] * 2. - 0.5 )+ self.grid).to(x.device)
+            
+            y[..., 0] = y[...,0]*(boxes_[:,2]-boxes_[:,0]).view(-1,1,1)/2+boxes_[:,0].view(-1,1,1)
+            y[..., 1] = y[...,1]*(boxes_[:,3]-boxes_[:,1]).view(-1,1,1)/2+boxes_[:,1].view(-1,1,1)
+            y[..., 2] = (y[..., 2])*(boxes_[:,2]-boxes_[:,0]).view(-1,1,1)
+            y[..., 3] = (y[..., 3])*(boxes_[:,3]-boxes_[:,1]).view(-1,1,1)
+            y = y.contiguous().view(bs,-1,y.shape[-1])
+            return y
+            # y[..., 4] = torch.ones_like(y[..., 4]).to(x.device)
 
-        ###TODO
-            y[..., 0] = (y[...,0] * 2. - 0.5 )*(boxes[:,2]-boxes[:,0])+boxes[:,0]
-            y[..., 1] = (y[..., 0:1] * 2. - 0.5 )*(boxes[:,3]-boxes[:,1])+boxes[:,1]
-            y[..., 2] = (y[..., 2])*2*(boxes[:,2]-boxes[:,0])
-            y[..., 3] = (y[..., 3])*2*(boxes[:,3]-boxes[:,1])
+
         return [x] if self.train else y
 
 
@@ -93,14 +102,17 @@ class refine_head(nn.Module):
 class refine_net(nn.Module):
     def __init__(self,cfg,ch=32):
         super(refine_net, self).__init__()
-        with open(cfg) as f:
-            import yaml
-            self.yaml = yaml.load(f, Loader=yaml.FullLoader)  # model dict
+        print(cfg)
+        if isinstance(cfg, dict):
+            self.yaml = cfg  # model dict
+        else:
+            with open(cfg) as f:
+                import yaml
+                self.yaml = yaml.load(f, Loader=yaml.FullLoader)  # model dict
         self.ch = ch
         nc = self.yaml['nc']
         self.rf_model,last_ch = self.parse_model()
         self.rf_model = self.rf_model
-        print(nc)
         self.rf_head = refine_head(nc=nc,ch=last_ch,up=torch.tensor(self.forward_compute_s(ch)))
     
     def forward_compute_s(self,ch):
@@ -110,13 +122,13 @@ class refine_net(nn.Module):
             x = layer(x)
         return z/x.shape[-1]
     
-    def forward(self,x,boxes=[],train=True):
+    def forward(self,x,boxes=[],train=True,eval=False):
         # print(self.rf_model)
         # exit()
         for i,layer in enumerate(self.rf_model):
             # print('xxx')
             x = layer(x)
-        x = self.rf_head(x,boxes,train)
+        x = self.rf_head(x,boxes,train,eval)
         return x
     
     def parse_model(self):

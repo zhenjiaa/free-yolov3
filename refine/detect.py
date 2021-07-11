@@ -77,10 +77,11 @@ def detect(save_img=False):
         # pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
         res,boxes = model.detector_(pred,feature)
         model.refine_net = model.refine_net.to(device)
-        res = model.refine_net(res,boxes,train=False)[0]
-        # res = res.contiguous().view(1,-1,)
+        res = model.refine_net(res,boxes,train=False)
+        print(res.shape)
+        # res = res.contiguous().view(1,-1,res.shape[-1])
         pred = non_max_suppression(res, 0.15, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
-        print(pred)
+        # print(pred)
 
         t2 = time_synchronized()
 
@@ -156,7 +157,7 @@ def detect(save_img=False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', nargs='+', type=str, default='ccpd/refine_yolov3/exp14/weights/last.pt', help='model.pt path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default='runs_ccpd/refine_yolov3_valastrain/exp4/weights/last.pt', help='model.pt path(s)')
     parser.add_argument('--source', type=str, default='val/', help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')

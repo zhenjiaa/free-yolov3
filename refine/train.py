@@ -26,7 +26,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-import refine_test as test_  # import test.py to get mAP after each epoch
+import refine.refine_test as test_  # import test.py to get mAP after each epoch
 from refine.yolo import  detector, refine_yolo
 from utils.autoanchor import check_anchors
 from utils.datasets import create_dataloader
@@ -299,7 +299,9 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                 (detect_res,pred),feature = model(imgs,refine=True)  # forward
                 loss, loss_items = compute_loss(pred, targets.to(device), model)  # loss scaled by batch_size
                 refine_loss = torch.zeros(1,device=device)
+                refine_ = False
                 if epoch>1:
+                    refine_ = True
                     res,boxes = model.detector_(detect_res,feature)
                     model.refine_net = model.refine_net.to(device)
                     res = model.refine_net(res,boxes)
@@ -361,7 +363,8 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                                                  dataloader=testloader,
                                                  save_dir=save_dir,
                                                  plots=plots and final_epoch,
-                                                 log_imgs=opt.log_imgs if wandb else 0)
+                                                 log_imgs=opt.log_imgs if wandb else 0,
+                                                 refine=refine_)
 
             # Write
             with open(results_file, 'a') as f:
@@ -434,13 +437,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', type=str, default='yolov3.pt', help='initial weights path')
     parser.add_argument('--cfg', type=str, default='ccpd/cfg/yolov3.yaml', help='model.yaml path')
-    parser.add_argument('--data', type=str, default='ccpd/cfg/ccpd_valastrain.yaml', help='data.yaml path')
+    parser.add_argument('--data', type=str, default='ccpd/cfg/ccpd.yaml', help='data.yaml path')
     parser.add_argument('--hyp', type=str, default='data/hyp.scratch.yaml', help='hyperparameters path')
     parser.add_argument('--epochs', type=int, default=300)
-    parser.add_argument('--batch-size', type=int, default=8, help='total batch size for all GPUs')
+    parser.add_argument('--batch-size', type=int, default=16, help='total batch size for all GPUs')
     parser.add_argument('--img-size', nargs='+', type=int, default=[320, 320], help='[train, test] image sizes')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
-    parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')
+    parser.add_argument('--resume', nargs='?', const=True, default='runs_ccpd/refine_yolov3_valastrain/exp6/weights/last.pt', help='resume most recent training')
     parser.add_argument('--nosave', action='store_true', help='only save final checkpoint')
     parser.add_argument('--notest', action='store_true', help='only test final epoch')
     parser.add_argument('--noautoanchor', action='store_true', help='disable autoanchor check')

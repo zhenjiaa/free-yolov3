@@ -104,7 +104,7 @@ def compute_loss_refinenet(p,targets,boxes,model):
 
             # Objectness
             tobj[b, gj, gi] = (1.0 - model.gr) + model.gr * iou.detach().clamp(0).type(tobj.dtype)  # iou ratio
-            print(torch.max(tobj),torch.max(pi[..., 4]))
+            # print(torch.max(tobj),torch.max(pi[..., 4]))
 
             # Classification
             if model.nc > 1:  # cls loss (only if multiple classes)
