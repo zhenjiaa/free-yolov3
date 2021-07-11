@@ -256,8 +256,72 @@ class LoadImagesAndLabels_fourpoints(Dataset):  # for training/testing
                 r = np.random.beta(8.0, 8.0)  # mixup ratio, alpha=beta=8.0
                 img = (img * r + img2 * (1 - r)).astype(np.uint8)
                 labels = np.concatenate((labels, labels2), 0)
+        
+        else:
+            # load images
+            img, (h0, w0), (h, w) = load_image(self, index)
 
-        pass
+            # letterbox
+            shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size  # final letterboxed shape
+            img, ratio, pad = letterbox(img, shape, auto=False, scaleup=self.augment)
+            shapes = (h0, w0), ((h / h0, w / w0), pad)  # for COCO mAP rescaling
+
+            slabels = []
+            x = self.labels[index]
+            if x.size > 0:
+                # Normalized xywh to pixel xyxy format
+                labels = x.copy()
+                labels[:, 1] = ratio[0] * w * x[:, 1] +pad[0]  # pad width
+                labels[:, 2] = ratio[1] * h * x[:, 2] +pad[1]  # pad height
+                labels[:, 3] = ratio[0] * w * x[:, 3] +pad[0]
+                labels[:, 4] = ratio[1] * h * x[:, 4] +pad[1]
+                labels[:, 5] = ratio[0] * h * x[:, 5] +pad[0]
+                labels[:, 6] = ratio[1] * h * x[:, 6] +pad[1]
+                labels[:, 7] = ratio[0] * h * x[:, 7] +pad[0]
+                labels[:, 8] = ratio[1] * h * x[:, 8] +pad[1]
+        if self.augment:
+            if not mosaic:
+                    img, labels = random_perspective_fourpoint(img, labels,
+                                                 degrees=hyp['degrees'],
+                                                 translate=hyp['translate'],
+                                                 scale=hyp['scale'],
+                                                 shear=hyp['shear'],
+                                                 perspective=hyp['perspective'])
+
+            # Aument colorspace
+            augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v'])
+        nL = len(labels)
+        if nL:
+            labels[:, [2, 4, 6, 8]] /= img.shape[0]  # normalized height 0-1
+            labels[:, [1, 3, 5, 7]] /= img.shape[1]  # normalized width 0-1
+
+
+        if self.augment:
+            if random.random() < hyp['flipud']:
+                img = np.flipud(img)
+                if nL:
+                    labels[:, [2, 4, 6, 8]] = 1 - labels[:, [2, 4, 6, 8]]
+
+            if random.random() < hyp['fliplr']:
+                img = np.fliplr(img)
+                if nL:
+                    labels[:, [1, 3, 5, 7]] = 1 - labels[:, [1, 3, 5, 7]]
+
+        labels_out = torch.zeros((nL, 8))
+        if nL:
+            labels_out[:, 1:] = torch.from_numpy(labels)
+
+        img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
+        img = np.ascontiguousarray(img)
+
+        return torch.from_numpy(img), labels_out, self.img_files[index], shapes
+        
+    @staticmethod
+    def collate_fn(batch):
+        img, label, path, shapes = zip(*batch)  # transposed
+        for i, l in enumerate(label):
+            l[:, 0] = i  # add target image index for build_targets()
+        return torch.stack(img, 0), torch.cat(label, 0), path, shapes
 
 
 
@@ -304,19 +368,95 @@ def load_mosaic(self,index):
             labels[:, 7] = h * x[:, 7]+ padh
             labels[:, 8] = h * x[:, 8]+ padh
         labels8.append(labels)
+    if len(labels8):
+        labels8 = np.concatenate(labels8, 0)
+        np.clip(labels8[:, 1:], 0, 2 * s, out=labels8[:, 1:]) 
+    img4, labels4 = random_perspective_fourpoint(img4, labels8,
+                                       degrees=self.hyp['degrees'],
+                                       translate=self.hyp['translate'],
+                                       scale=self.hyp['scale'],
+                                       shear=self.hyp['shear'],
+                                       perspective=self.hyp['perspective'],
+                                       border=self.mosaic_border)  # border to remove
 
-
+    return img4, labels4
 
     pass
 
-def random_perspective(img, targets=(), degrees=10, translate=.1, scale=.1, shear=10, perspective=0.0, border=(0, 0)):
-    pass
+def random_perspective_fourpoint(img, targets=(), degrees=10, translate=.1, scale=.1, shear=10, perspective=0.0, border=(0, 0)):
+ 
+    height = img.shape[0] + border[0] * 2  # shape(h,w,c)
+    width = img.shape[1] + border[1] * 2
+
+    # Center
+    C = np.eye(3)
+    C[0, 2] = -img.shape[1] / 2  # x translation (pixels)
+    C[1, 2] = -img.shape[0] / 2  # y translation (pixels)
+
+    # Perspective 投射变换
+    P = np.eye(3)
+    P[2, 0] = random.uniform(-perspective, perspective)  # x perspective (about y)
+    P[2, 1] = random.uniform(-perspective, perspective)  # y perspective (about x)
+
+    # Rotation and Scale
+    R = np.eye(3)
+    a = random.uniform(-degrees, degrees)
+    # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
+    s = random.uniform(1 - scale, 1 + scale)
+    # s = 2 ** random.uniform(-scale, scale)
+    R[:2] = cv2.getRotationMatrix2D(angle=a, center=(0, 0), scale=s)
+
+    # Shear
+    S = np.eye(3)
+    S[0, 1] = math.tan(random.uniform(-shear, shear) * math.pi / 180)  # x shear (deg)
+    S[1, 0] = math.tan(random.uniform(-shear, shear) * math.pi / 180)  # y shear (deg)
+
+    # Translation
+    T = np.eye(3)
+    T[0, 2] = random.uniform(0.5 - translate, 0.5 + translate) * width  # x translation (pixels)
+    T[1, 2] = random.uniform(0.5 - translate, 0.5 + translate) * height  # y translation (pixels)
+
+    # Combined rotation matrix
+    M = T @ S @ R @ P @ C  # order of operations (right to left) is IMPORTANT
+    if (border[0] != 0) or (border[1] != 0) or (M != np.eye(3)).any():  # image changed
+        if perspective:
+            img = cv2.warpPerspective(img, M, dsize=(width, height), borderValue=(114, 114, 114))
+        else:  # affine
+            img = cv2.warpAffine(img, M[:2], dsize=(width, height), borderValue=(114, 114, 114))
+
+    n = len(targets)
+    if n:
+        # warp points
+        xy = np.ones((n*4,3))
+        xy[:,:2] = targets[:, [1, 2, 3, 4, 5, 6, 7, 8]].reshape(n * 4, 2)
+        xy = xy @ M*T
+        if perspective:
+            xy = (xy[:, :2] / xy[:, 2:3]).reshape(n, 8)  # rescale
+        else:  # affine
+            xy = xy[:, :2].reshape(n, 8)
+
+        xy[:, [0, 2, 4, 6]] = xy[:, [0, 2, 4, 6]].clip(0, width)
+        xy[:, [1, 3, 6, 7]] = xy[:, [1, 3, 6, 7]].clip(0, height)
+
+        x = xy[:, [0, 2, 4, 6]]
+        y = xy[:, [1, 3, 5, 7]]
+        xy_ = np.concatenate((x.min(1), y.min(1), x.max(1), y.max(1))).reshape(4, n).T
+
+        x = targets[:, [1, 3, 5, 7]]
+        y = targets[:, [2, 4, 6, 8]]
+        target_ = np.concatenate((x.min(1), y.min(1), x.max(1), y.max(1))).reshape(4, n).T
+
+        i = box_candidates(box1=target_.T * s, box2=xy_.T)
+        targets = targets[i]
+        targets[:, 1:9] = xy[i]
+    return img,targets
+
 
 
 def box_candidates(box1, box2, wh_thr=2, ar_thr=20, area_thr=0.1):
     pass
 
-def cutout(image, labels):
+def cutout(image, labels):  #没有使用
     pass
 
 
