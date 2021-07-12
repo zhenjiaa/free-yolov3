@@ -1,9 +1,12 @@
 
+import re
 import torch
 import torch.nn as nn
 
 from utils.general import bbox_iou
 from utils.torch_utils import is_parallel
+
+import torch.nn.functional as F
 
 def smooth_BCE(eps=0.1):  # https://github.com/ultralytics/yolov3/issues/238#issuecomment-598028441
     # return positive, negative label smoothing BCE targets
@@ -58,13 +61,12 @@ class FocalLoss(nn.Module):
 def compute_loss_refinenet(p,targets,boxes,model):
     device = targets.device
     all_batch_target = build_targets_forbatch([320,320],targets,boxes)
-    b_boxes = torch.cat(boxes,0)
-    indices,tbox,tcls = build_targets_forlayer(p, all_batch_target)
+    indices,tpoint,tcls,tbox = build_targets_forlayer(p, all_batch_target)
     
     bs = p[0][...,0].shape[0]
     
     # # print(bs)
-    lcls, lbox, lobj = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
+    lcls, lbox, lobj,lpoint_loss = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device),torch.zeros(1, device=device)
     h = model.hyp  # hyperparameters
 
     # Define criteria
@@ -94,10 +96,16 @@ def compute_loss_refinenet(p,targets,boxes,model):
 
             # Regression
             if True:
-                pxy = ps[:, :2].sigmoid() * 2. - 0.5
+                p_fourpoint = (ps[:, :8].sigmoid()-0.5)*2
+                lpoint_loss += F.mse_loss(p_fourpoint,tpoint[i])
+
                 # print(pi.shape)
-                pwh = (ps[:, 2:4].sigmoid()*torch.tensor([2,2]).to(device)).to(device)
-                pbox = torch.cat((pxy, pwh), 1).to(device)  # predicted box
+                pbox = get_rec_box_for_predict(p_fourpoint)
+
+                # pxy = 
+                # pwh = (ps[:, 2:4].sigmoid()*torch.tensor([2,2]).to(device)).to(device)
+
+                # pbox = torch.cat((pxy, pwh), 1).to(device)  # predicted box
                 # iou = bbox_iou(pbox.T, tbox[i], x1y1x2y2=False, DIoU=True,CIoU=True)  # iou(prediction, target)
                 iou = bbox_iou(pbox.T, tbox[i], x1y1x2y2=False,CIoU=True)  # iou(prediction, target)
                 lbox += (1.0 - iou).mean()
@@ -120,9 +128,9 @@ def compute_loss_refinenet(p,targets,boxes,model):
     lcls *= h['cls'] * s*0.5
     bs = tobj.shape[0]  # batch size
     # else:
-    loss = lbox +lobj+lcls
+    loss = lbox +lobj+lcls+lpoint_loss
     loss = loss*0.01
-    return loss * bs, torch.cat((lbox, lobj, lcls, loss)).detach()
+    return loss * bs, torch.cat((lbox, lobj, lcls,lpoint_loss, loss)).detach()
 
 
 
@@ -144,26 +152,26 @@ def build_targets_forbatch(feature_size,target,bboxes):
         bbox = bboxes[j]
         if nt and len(bbox):
             im_target = im_target.detach()
-            im_target[:,2] = im_target[:,2]*feature_size[0]
-            im_target[:,3] = im_target[:,3]*feature_size[1]
-            im_target[:,4] = im_target[:,4]*feature_size[0]
-            im_target[:,5] = im_target[:,5]*feature_size[1]
+            im_target[:,[2,4,6,8]] = im_target[:,[2,4,6,8]]*feature_size[0]
+            im_target[:,[3,5,7,9]] = im_target[:,[3,5,7,9]]*feature_size[1]
+            # im_target[:,4] = im_target[:,4]*feature_size[0]
+            # im_target[:,5] = im_target[:,5]*feature_size[1]
             # im_target = im_target.repeat(len(bbox),1)
             im_target_res = torch.zeros_like(im_target).repeat(len(bbox),1)
             
             for i in range(len(bbox)):
-                im_target_res[(i)*nt:(i+1)*nt,2] = (im_target[:,2]-bbox[i][0])/(bbox[i][2]-bbox[i][0])
-                im_target_res[(i)*nt:(i+1)*nt,3] = (im_target[:,3]-bbox[i][1])/(bbox[i][3]-bbox[i][1])
-                im_target_res[(i)*nt:(i+1)*nt,4] = im_target[:,4]/(bbox[i][2]-bbox[i][0])
-                im_target_res[(i)*nt:(i+1)*nt,5] = im_target[:,5]/(bbox[i][3]-bbox[i][1])
+                im_target_res[(i)*nt:(i+1)*nt,[2,4,6,8]] = (im_target[:,[2,4,6,8]]-bbox[i][0])/(bbox[i][2]-bbox[i][0])
+                im_target_res[(i)*nt:(i+1)*nt,[3,5,7,9]] = (im_target[:,[3,5,7,9]]-bbox[i][1])/(bbox[i][3]-bbox[i][1])
+                # im_target_res[(i)*nt:(i+1)*nt,4] = im_target[:,4]/(bbox[i][2]-bbox[i][0])
+                # im_target_res[(i)*nt:(i+1)*nt,5] = im_target[:,5]/(bbox[i][3]-bbox[i][1])
                 im_target_res[(i)*nt:(i+1)*nt,1] = im_target[:,1]
                 im_target_res[(i)*nt:(i+1)*nt,0]=i+BOX_COUNT
             min_ = torch.min(im_target_res[...,2:3],1)[0]>=0    
-            im_target_res = im_target_res[torch.min(im_target_res[...,2:4],1)[0]>=0]
+            im_target_res = im_target_res[torch.min(im_target_res[...,2:10],1)[0]>=0]
             if im_target_res.shape[0]>0:
-                im_target_res = im_target_res[torch.max(im_target_res[...,2:4],1)[0]<=1]
-            if im_target_res.shape[0]>0:
-                im_target_res = im_target_res[torch.max(im_target_res[...,4:6],1)[0]<=1]
+                im_target_res = im_target_res[torch.max(im_target_res[...,2:10],1)[0]<=1]
+            # if im_target_res.shape[0]>0:
+            #     im_target_res = im_target_res[torch.max(im_target_res[...,4:6],1)[0]<=1]
             all_batch_target.append((im_target_res))
             BOX_COUNT+=len(bbox)
             # print(im_target.shape)
@@ -172,26 +180,70 @@ def build_targets_forbatch(feature_size,target,bboxes):
 
 
 def build_targets_forlayer(p, targets):
-    tcls, tbox, indices = [], [], []
-    gain = torch.ones(6, device=targets.device)
+    tcls, t_fourpoint, indices,tbox= [], [], [],[]
+    all_target = get_rec_box(targets,14)
+    gain = torch.ones(14, device=targets.device)
     # targets = torch.cat((targets.repeat(na, 1, 1), ai[:, :, None]), 2)
     g = 0.5
     for i in range(len(p)):
-        gain[2:6] = torch.tensor(p[i].shape)[[2, 1, 2, 1]]
-        t = targets * gain
-        gxy = t[:, 2:4]  # grid xy
+        gain[2:14] = torch.tensor(p[i].shape)[[2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1]]
+        t = all_target * gain
 
         b, c = t[:, :2].long().T  # image, class
-        gxy = t[:, 2:4]  # grid xy
+        gxy = t[:, 10:12]  # grid xy
         offsets = 0
         gxy_ = torch.round(gxy)
-
-        gwh = t[:, 4:6]  # grid wh
+        gwh = t[:,12:14]
 
         gij = (gxy_ - offsets).long()
-        gi, gj = gij.T  # grid xy indices
+        gi, gj = gij.T
+
+        pre_point_ = gxy_.repeat(1,4)
+
+        g_fpoint = t[:, 2:10]  # grid wh
 
         indices.append((b, gj.clamp_(0, gain[3] - 1), gi.clamp_(0, gain[2] - 1)))  # image, anchor, grid indices
-        tbox.append(torch.cat((gxy - gij, gwh), 1))  # box
+        t_fourpoint.append(g_fpoint - pre_point_)  # box
         tcls.append(c)  # class
-    return indices,tbox,tcls
+        tbox.append(torch.cat((gxy - gij, gwh), 1))
+
+    return indices,t_fourpoint,tcls,tbox
+
+
+def get_rec_box(target,res_shape):
+    if res_shape==14:
+        res = torch.zeros((target.shape[0],res_shape))
+        res[:,0:10] = target
+        xmin = torch.min(target[:,[2,4,6,8]],1)[0]
+        ymin = torch.min(target[:,[3,5,7,9]],1)[0]
+        xmax = torch.max(target[:,[2,4,6,8]],1)[0]
+        ymax = torch.max(target[:,[3,5,7,9]],1)[0]
+        res[:,10:11] = (xmin+xmax)/2
+        res[:,11:12] = (ymin+ymax)/2
+        res[:,12:13] = (xmax-xmin)
+        res[:,13:14] = (ymax-ymin)
+    if res_shape==6:
+        res = torch.zeros((target.shape[0],res_shape))
+        res[:,0:2] = target[:,0:2]
+        xmin = torch.min(target[:,[2,4,6,8]],1)[0]
+        ymin = torch.min(target[:,[3,5,7,9]],1)[0]
+        xmax = torch.max(target[:,[2,4,6,8]],1)[0]
+        ymax = torch.max(target[:,[3,5,7,9]],1)[0]
+        res[:,2:3] = (xmin+xmax)/2
+        res[:,3:4] = (ymin+ymax)/2
+        res[:,4:5] = (xmax-xmin)
+        res[:,5:6] = (ymax-ymin)
+    return res
+
+def get_rec_box_for_predict(target):
+    res = torch.zeros((target.shape[0],4))
+    xmin = torch.min(target[:,[0,2,4,6]],1)[0]
+    ymin = torch.min(target[:,[1,3,5,7]],1)[0]
+    xmax = torch.max(target[:,[0,2,4,6]],1)[0]
+    ymax = torch.max(target[:,[1,3,5,7]],1)[0]
+    res[:,0] = (xmin+xmax)/2
+    res[:,1] = (ymin+ymax)/2
+    res[:,2] = (xmax-xmin)
+    res[:,3] = (ymax-ymin)
+    return res
+
