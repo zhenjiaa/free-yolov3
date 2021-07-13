@@ -28,7 +28,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-import test_ as test_  # import test.py to get mAP after each epoch
+import fourpoint.test_ as test_  # import test.py to get mAP after each epoch
 from refine.yolo import  detector, refine_yolo
 from utils.autoanchor import check_anchors
 from fourpoint.dataset import create_dataloader
@@ -320,7 +320,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                 loss, loss_items = compute_loss(pred, targets.to(device), model)  # loss scaled by batch_size
                 refine_loss = torch.zeros(1,device=device)
                 refine_ = False
-                if epoch>0:
+                if epoch>20:
                     refine_ = True
                     res,boxes = model.detector_(detect_res,feature)
                     model.refine_net = model.refine_net.to(device)
@@ -383,8 +383,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                                                  dataloader=testloader,
                                                  save_dir=save_dir,
                                                  plots=plots and final_epoch,
-                                                 log_imgs=opt.log_imgs if wandb else 0,
-                                                 refine=refine_)
+                                                 log_imgs=opt.log_imgs if wandb else 0)
 
             # Write
             with open(results_file, 'a') as f:
@@ -460,10 +459,10 @@ if __name__ == '__main__':
     parser.add_argument('--data', type=str, default='ccpd/cfg/ccpd_valastrain.yaml', help='data.yaml path')
     parser.add_argument('--hyp', type=str, default='data/hyp.scratch.yaml', help='hyperparameters path')
     parser.add_argument('--epochs', type=int, default=300)
-    parser.add_argument('--batch-size', type=int, default=1, help='total batch size for all GPUs')
+    parser.add_argument('--batch-size', type=int, default=2, help='total batch size for all GPUs')
     parser.add_argument('--img-size', nargs='+', type=int, default=[320, 320], help='[train, test] image sizes')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
-    parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')
+    parser.add_argument('--resume', nargs='?', const=True, default='runs_ccpd/refine_yolov3_fourpoint/exp63/weights/last.pt', help='resume most recent training')
     parser.add_argument('--nosave', action='store_true', help='only save final checkpoint')
     parser.add_argument('--notest', action='store_true', help='only test final epoch')
     parser.add_argument('--noautoanchor', action='store_true', help='disable autoanchor check')

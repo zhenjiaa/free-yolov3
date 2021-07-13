@@ -181,7 +181,7 @@ def build_targets_forbatch(feature_size,target,bboxes):
 
 def build_targets_forlayer(p, targets):
     tcls, t_fourpoint, indices,tbox= [], [], [],[]
-    all_target = get_rec_box(targets,14)
+    all_target = get_rec_box(targets,14).to(targets.device)
     gain = torch.ones(14, device=targets.device)
     # targets = torch.cat((targets.repeat(na, 1, 1), ai[:, :, None]), 2)
     g = 0.5
@@ -211,7 +211,7 @@ def build_targets_forlayer(p, targets):
 
 
 def get_rec_box(target,res_shape):
-    print(target.shape)
+    # print(target.shape)
     if res_shape==14:
         res = torch.zeros((target.shape[0],res_shape))
         if target.shape[0]!=0:
