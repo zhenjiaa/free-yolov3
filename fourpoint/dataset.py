@@ -208,7 +208,7 @@ class LoadImagesAndLabels_fourpoints(Dataset):  # for training/testing
                     with open(lb_file, 'r') as f:
                         l = np.array([x.split() for x in f.read().strip().splitlines()], dtype=np.float32)  # labels
                     if len(l):
-                        assert l.shape[1] == 9, 'labels require 5 columns each'
+                        assert l.shape[1] == 9, 'labels require 9 columns each'
                         assert (l >= 0).all(), 'negative labels'
                         assert (l[:, 1:] <= 1).all(), 'non-normalized or out of bounds coordinate labels'
                         assert np.unique(l, axis=0).shape[0] == l.shape[0], 'duplicate labels'
@@ -307,7 +307,7 @@ class LoadImagesAndLabels_fourpoints(Dataset):  # for training/testing
                 if nL:
                     labels[:, [1, 3, 5, 7]] = 1 - labels[:, [1, 3, 5, 7]]
 
-        labels_out = torch.zeros((nL, 8))
+        labels_out = torch.zeros((nL, 10))
         if nL:
             labels_out[:, 1:] = torch.from_numpy(labels)
 
@@ -370,8 +370,8 @@ def load_mosaic(self,index):
         labels8.append(labels)
     if len(labels8):
         labels8 = np.concatenate(labels8, 0)
-        np.clip(labels8[:, 1:], 0, 2 * s, out=labels8[:, 1:]) 
-    img4, labels4 = random_perspective_fourpoint(img4, labels8,
+        np.clip(labels8[:, 1:], 0, 2 * s, out=labels8[:, 1:])
+    img4, labels8 = random_perspective_fourpoint(img4, labels8,
                                        degrees=self.hyp['degrees'],
                                        translate=self.hyp['translate'],
                                        scale=self.hyp['scale'],
@@ -379,7 +379,7 @@ def load_mosaic(self,index):
                                        perspective=self.hyp['perspective'],
                                        border=self.mosaic_border)  # border to remove
 
-    return img4, labels4
+    return img4, labels8
 
     pass
 
@@ -429,14 +429,14 @@ def random_perspective_fourpoint(img, targets=(), degrees=10, translate=.1, scal
         # warp points
         xy = np.ones((n*4,3))
         xy[:,:2] = targets[:, [1, 2, 3, 4, 5, 6, 7, 8]].reshape(n * 4, 2)
-        xy = xy @ M*T
+        xy = xy @ M.T
         if perspective:
             xy = (xy[:, :2] / xy[:, 2:3]).reshape(n, 8)  # rescale
         else:  # affine
             xy = xy[:, :2].reshape(n, 8)
 
         xy[:, [0, 2, 4, 6]] = xy[:, [0, 2, 4, 6]].clip(0, width)
-        xy[:, [1, 3, 6, 7]] = xy[:, [1, 3, 6, 7]].clip(0, height)
+        xy[:, [1, 3, 5, 7]] = xy[:, [1, 3, 5, 7]].clip(0, height)
 
         x = xy[:, [0, 2, 4, 6]]
         y = xy[:, [1, 3, 5, 7]]
@@ -445,8 +445,7 @@ def random_perspective_fourpoint(img, targets=(), degrees=10, translate=.1, scal
         x = targets[:, [1, 3, 5, 7]]
         y = targets[:, [2, 4, 6, 8]]
         target_ = np.concatenate((x.min(1), y.min(1), x.max(1), y.max(1))).reshape(4, n).T
-
-        i = box_candidates(box1=target_.T * s, box2=xy_.T)
+        i = box_candidates(box1=target_.T* s, box2=xy_.T)
         targets = targets[i]
         targets[:, 1:9] = xy[i]
     return img,targets
@@ -454,7 +453,14 @@ def random_perspective_fourpoint(img, targets=(), degrees=10, translate=.1, scal
 
 
 def box_candidates(box1, box2, wh_thr=2, ar_thr=20, area_thr=0.1):
-    pass
+    # print(box1,box2)
+    # Compute candidate boxes: box1 before augment, box2 after augment, wh_thr (pixels), aspect_ratio_thr, area_ratio
+    w1, h1 = box1[2] - box1[0], box1[3] - box1[1]
+    w2, h2 = box2[2] - box2[0], box2[3] - box2[1]
+    ar = np.maximum(w2 / (h2 + 1e-16), h2 / (w2 + 1e-16))  # aspect ratio
+    # print(w2 * h2 / (w1 * h1 + 1e-16) > area_thr)
+    # print(ar < ar_thr)
+    return (w2 > wh_thr) & (h2 > wh_thr) & (w2 * h2 / (w1 * h1 + 1e-16) > area_thr) & (ar < ar_thr)  # candidates
 
 def cutout(image, labels):  #没有使用
     pass
@@ -539,7 +545,7 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
 def img2label_paths(img_paths):
     # Define label paths as a function of image paths
     sa, sb = os.sep + 'images' + os.sep, os.sep + 'labels' + os.sep  # /images/, /labels/ substrings
-    return [x.replace(sa, sb, 1).replace('.' + x.split('.')[-1], '.txt') for x in img_paths]
+    return [x.replace(sa, sb, 1).replace('.' + x.split('.')[-1], '_fourpoint.txt') for x in img_paths]
 
 
 
