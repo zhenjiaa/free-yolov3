@@ -96,7 +96,7 @@ def compute_loss_refinenet(p,targets,boxes,model):
             if True:
                 pxy = ps[:, :2].sigmoid() * 2. - 0.5
                 # print(pi.shape)
-                pwh = (ps[:, 2:4].sigmoid()*torch.tensor([2,2]).to(device)).to(device)
+                pwh = (ps[:, 2:4].sigmoid()*torch.tensor([pi.shape[1],pi.shape[1]]).to(device)).to(device)
                 pbox = torch.cat((pxy, pwh), 1).to(device)  # predicted box
                 # iou = bbox_iou(pbox.T, tbox[i], x1y1x2y2=False, DIoU=True,CIoU=True)  # iou(prediction, target)
                 iou = bbox_iou(pbox.T, tbox[i], x1y1x2y2=False,CIoU=True)  # iou(prediction, target)

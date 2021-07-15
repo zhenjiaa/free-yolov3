@@ -55,11 +55,6 @@ class refine_head(nn.Module):
         bs, _, ny, nx = x.shape
         x = x.permute(0,2,3,1).contiguous()   # b*n*n*5
         # if not self.train:
-
-        
-       
-        # 
-
         # ###TODO
         if not train:
             boxes = boxes[0]
@@ -67,8 +62,8 @@ class refine_head(nn.Module):
             self.grid = self._make_grid(nx, ny).to(x.device)
             y[..., 0:2] = ((y[...,0:2] * 2. - 0.5 )+ self.grid).to(x.device)
             
-            y[..., 0] = y[...,0]*(boxes[:,2]-boxes[:,0]).view(-1,1,1)/2+boxes[:,0].view(-1,1,1)
-            y[..., 1] = y[...,1]*(boxes[:,3]-boxes[:,1]).view(-1,1,1)/2+boxes[:,1].view(-1,1,1)
+            y[..., 0] = y[...,0]*(boxes[:,2]-boxes[:,0]).view(-1,1,1)/y.shape[1]+boxes[:,0].view(-1,1,1)
+            y[..., 1] = y[...,1]*(boxes[:,3]-boxes[:,1]).view(-1,1,1)/y.shape[2]+boxes[:,1].view(-1,1,1)
             y[..., 2] = (y[..., 2])*(boxes[:,2]-boxes[:,0]).view(-1,1,1)
             y[..., 3] = (y[..., 3])*(boxes[:,3]-boxes[:,1]).view(-1,1,1)
             y = y.contiguous().view(bs,-1,y.shape[-1])
@@ -81,8 +76,8 @@ class refine_head(nn.Module):
             self.grid = self._make_grid(nx, ny).to(x.device)
             y[..., 0:2] = ((y[...,0:2] * 2. - 0.5 )+ self.grid).to(x.device)
             
-            y[..., 0] = y[...,0]*(boxes_[:,2]-boxes_[:,0]).view(-1,1,1)/2+boxes_[:,0].view(-1,1,1)
-            y[..., 1] = y[...,1]*(boxes_[:,3]-boxes_[:,1]).view(-1,1,1)/2+boxes_[:,1].view(-1,1,1)
+            y[..., 0] = y[...,0]*(boxes_[:,2]-boxes_[:,0]).view(-1,1,1)/y.shape[1]+boxes_[:,0].view(-1,1,1)
+            y[..., 1] = y[...,1]*(boxes_[:,3]-boxes_[:,1]).view(-1,1,1)/y.shape[2]+boxes_[:,1].view(-1,1,1)
             y[..., 2] = (y[..., 2])*(boxes_[:,2]-boxes_[:,0]).view(-1,1,1)
             y[..., 3] = (y[..., 3])*(boxes_[:,3]-boxes_[:,1]).view(-1,1,1)
             y = y.contiguous().view(bs,-1,y.shape[-1])
@@ -221,12 +216,13 @@ if __name__ == '__main__':
     model = refine_yolo('models/yolov3.yaml',detector_args=detector_args).to(device)
     model.train()
     # print(model)
-    x = torch.rand((8,3,32,32)).to(device)
-    x = cv2.imread('/data1/paper_/test/free-yolov3/coco128/images/train2017/000000000009.jpg')
-    x = torch.tensor(cv2.resize(x,(320,320))).to(device)
-    x = x.permute(2,0,1).unsqueeze(0).float()
-    (detect_res,pred),feature = model(x,refine=True)
-    res,boxes = model.detector_(detect_res,[x])
+    # x = torch.rand((8,3,32,32)).to(device)
+    # x = cv2.imread('/data1/paper_/test/free-yolov3/coco128/images/train2017/000000000009.jpg')
+    # x = torch.tensor(cv2.resize(x,(320,320))).to(device)
+    # x = x.permute(2,0,1).unsqueeze(0).float()
+    # (detect_res,pred),feature = model(x,refine=True)
+    # res,boxes = model.detector_(detect_res,[x])
+    print(model)
     # if model.training:
     #     res,_ = model.detector_(detect_res,feature)
     #     res = model.refine_net(res)
