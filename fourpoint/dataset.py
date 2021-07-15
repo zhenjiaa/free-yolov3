@@ -275,9 +275,9 @@ class LoadImagesAndLabels_fourpoints(Dataset):  # for training/testing
                 labels[:, 2] = ratio[1] * h * x[:, 2] +pad[1]  # pad height
                 labels[:, 3] = ratio[0] * w * x[:, 3] +pad[0]
                 labels[:, 4] = ratio[1] * h * x[:, 4] +pad[1]
-                labels[:, 5] = ratio[0] * h * x[:, 5] +pad[0]
+                labels[:, 5] = ratio[0] * w * x[:, 5] +pad[0]
                 labels[:, 6] = ratio[1] * h * x[:, 6] +pad[1]
-                labels[:, 7] = ratio[0] * h * x[:, 7] +pad[0]
+                labels[:, 7] = ratio[0] * w * x[:, 7] +pad[0]
                 labels[:, 8] = ratio[1] * h * x[:, 8] +pad[1]
         if self.augment:
             if not mosaic:
@@ -363,9 +363,9 @@ def load_mosaic(self,index):
             labels[:, 2] = h * x[:, 2]+ padh
             labels[:, 3] = w * x[:, 3]+ padw
             labels[:, 4] = h * x[:, 4]+ padh
-            labels[:, 5] = h * x[:, 5]+ padh
+            labels[:, 5] = w * x[:, 5]+ padw
             labels[:, 6] = h * x[:, 6]+ padh
-            labels[:, 7] = h * x[:, 7]+ padh
+            labels[:, 7] = w * x[:, 7]+ padw
             labels[:, 8] = h * x[:, 8]+ padh
         labels8.append(labels)
     if len(labels8):
@@ -551,7 +551,6 @@ def img2label_paths(img_paths):
 
 class InfiniteDataLoader(torch.utils.data.dataloader.DataLoader):
     """ Dataloader that reuses workers
-
     Uses same syntax as vanilla DataLoader
     """
 
@@ -570,7 +569,6 @@ class InfiniteDataLoader(torch.utils.data.dataloader.DataLoader):
 
 class _RepeatSampler(object):
     """ Sampler that repeats forever
-
     Args:
         sampler (Sampler)
     """
@@ -581,8 +579,3 @@ class _RepeatSampler(object):
     def __iter__(self):
         while True:
             yield from iter(self.sampler)
-
-
-# 去utils 找
-#自动做训练集测试集划分   # defautosplit
-#将检测数据集抠图变为分类数据集 # extract_boxes

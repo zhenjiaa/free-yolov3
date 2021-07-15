@@ -1,3 +1,4 @@
+from enum import Flag
 import sys
 from unicodedata import decimal
 sys.path.append('./')
@@ -29,7 +30,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 import fourpoint.test_ as test_  # import test.py to get mAP after each epoch
-from refine.yolo import  detector, refine_yolo
+from fourpoint.yolo import  detector, refine_yolo
 from utils.autoanchor import check_anchors
 from fourpoint.dataset import create_dataloader
 from utils.general import labels_to_class_weights, increment_path, labels_to_image_weights, init_seeds, \
@@ -274,18 +275,13 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
             
 
-            ig = imgs[0].permute(1,2,0).numpy().copy()
-            # print(ig.shape)
-            # targets = (targets*320)[0].numpy()
-            # print(targets)
-
+            # ig = imgs[0].permute(1,2,0).numpy().copy()
             # x1 = int(targets[2])
             # x2 = int(targets[3])
             # x3 = int(targets[4])
             # x4 = int(targets[5])
-            # print(x1,x2,x3,x4)
             # cv2.line(ig,(x1,x2),(x3,x4),(0,255,255),2)
-            cv2.imwrite('yanzheng/1.jpg',ig)
+            # cv2.imwrite('yanzheng/1.jpg',ig)
             # print('xxxxxxxxxxxx')
             # exit()
 
@@ -320,8 +316,8 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                 loss, loss_items = compute_loss(pred, targets.to(device), model)  # loss scaled by batch_size
                 refine_loss = torch.zeros(1,device=device)
                 refine_ = False
-                if epoch>20:
-                    refine_ = True
+                if epoch>1:
+                    refine_ = False
                     res,boxes = model.detector_(detect_res,feature)
                     model.refine_net = model.refine_net.to(device)
                     res = model.refine_net(res,boxes)
@@ -455,14 +451,14 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', type=str, default='yolov3.pt', help='initial weights path')
-    parser.add_argument('--cfg', type=str, default='ccpd/cfg/yolov3.yaml', help='model.yaml path')
-    parser.add_argument('--data', type=str, default='ccpd/cfg/ccpd_valastrain.yaml', help='data.yaml path')
+    parser.add_argument('--cfg', type=str, default='cfg/ccpd/refine_down8.yaml', help='model.yaml path')
+    parser.add_argument('--data', type=str, default='cfg/ccpd/ccpd_valastrain.yaml', help='data.yaml path')
     parser.add_argument('--hyp', type=str, default='data/hyp.scratch.yaml', help='hyperparameters path')
     parser.add_argument('--epochs', type=int, default=300)
-    parser.add_argument('--batch-size', type=int, default=2, help='total batch size for all GPUs')
+    parser.add_argument('--batch-size', type=int, default=4, help='total batch size for all GPUs')
     parser.add_argument('--img-size', nargs='+', type=int, default=[320, 320], help='[train, test] image sizes')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
-    parser.add_argument('--resume', nargs='?', const=True, default='runs_ccpd/refine_yolov3_fourpoint/exp63/weights/last.pt', help='resume most recent training')
+    parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')
     parser.add_argument('--nosave', action='store_true', help='only save final checkpoint')
     parser.add_argument('--notest', action='store_true', help='only test final epoch')
     parser.add_argument('--noautoanchor', action='store_true', help='disable autoanchor check')
@@ -470,7 +466,7 @@ if __name__ == '__main__':
     parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
     parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
     parser.add_argument('--image-weights', action='store_true', help='use weighted image selection for training')
-    parser.add_argument('--device', default='3', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--device', default='2', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--multi-scale', action='store_true', help='vary img-size +/- 50%%')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
     parser.add_argument('--adam', action='store_true', help='use torch.optim.Adam() optimizer')
@@ -478,7 +474,7 @@ if __name__ == '__main__':
     parser.add_argument('--local_rank', type=int, default=-1, help='DDP parameter, do not modify')
     parser.add_argument('--log-imgs', type=int, default=16, help='number of images for W&B logging, max 100')
     parser.add_argument('--workers', type=int, default=8, help='maximum number of dataloader workers')
-    parser.add_argument('--project', default='runs_ccpd/refine_yolov3_fourpoint', help='save to project/name')
+    parser.add_argument('--project', default='runs/train', help='save to project/name')
     parser.add_argument('--name', default='exp', help='save to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
     opt = parser.parse_args()

@@ -1,6 +1,7 @@
 
 import re
 import torch
+from torch.cuda import device
 import torch.nn as nn
 
 from utils.general import bbox_iou
@@ -63,6 +64,8 @@ def compute_loss_refinenet(p,targets,boxes,model):
     all_batch_target = build_targets_forbatch([320,320],targets,boxes)
     indices,tpoint,tcls,tbox = build_targets_forlayer(p, all_batch_target)
     
+
+    
     bs = p[0][...,0].shape[0]
     
     # # print(bs)
@@ -96,7 +99,10 @@ def compute_loss_refinenet(p,targets,boxes,model):
 
             # Regression
             if True:
+                # print(ps.shape)
                 p_fourpoint = (ps[:, :8].sigmoid()-0.5)*2
+                # print(p_fourpoint.shape)
+                # print(tpoint[i].shape)
                 lpoint_loss += F.mse_loss(p_fourpoint,tpoint[i])
 
                 # print(pi.shape)
@@ -107,7 +113,7 @@ def compute_loss_refinenet(p,targets,boxes,model):
 
                 # pbox = torch.cat((pxy, pwh), 1).to(device)  # predicted box
                 # iou = bbox_iou(pbox.T, tbox[i], x1y1x2y2=False, DIoU=True,CIoU=True)  # iou(prediction, target)
-                iou = bbox_iou(pbox.T, tbox[i], x1y1x2y2=False,CIoU=True)  # iou(prediction, target)
+                iou = bbox_iou(pbox.T.to(device), tbox[i].to(device), x1y1x2y2=False,CIoU=True)  # iou(prediction, target)
                 lbox += (1.0 - iou).mean()
 
             # Objectness
@@ -175,7 +181,10 @@ def build_targets_forbatch(feature_size,target,bboxes):
             all_batch_target.append((im_target_res))
             BOX_COUNT+=len(bbox)
             # print(im_target.shape)
-    all_batch_target=torch.cat(all_batch_target,0)
+    if  len(bboxes):    
+        all_batch_target=torch.cat(all_batch_target,0)
+    else:
+        return torch.zeros(0,10)
     return all_batch_target
 
 
@@ -220,10 +229,10 @@ def get_rec_box(target,res_shape):
             ymin = torch.min(target[:,[3,5,7,9]],1)[0]
             xmax = torch.max(target[:,[2,4,6,8]],1)[0]
             ymax = torch.max(target[:,[3,5,7,9]],1)[0]
-            res[:,10:11] = (xmin+xmax)/2
-            res[:,11:12] = (ymin+ymax)/2
-            res[:,12:13] = (xmax-xmin)
-            res[:,13:14] = (ymax-ymin)
+            res[:,10] = (xmin+xmax)/2
+            res[:,11] = (ymin+ymax)/2
+            res[:,12] = (xmax-xmin)
+            res[:,13] = (ymax-ymin)
         return res
     if res_shape==6:
         res = torch.zeros((target.shape[0],res_shape))
@@ -233,10 +242,10 @@ def get_rec_box(target,res_shape):
             ymin = torch.min(target[:,[3,5,7,9]],1)[0]
             xmax = torch.max(target[:,[2,4,6,8]],1)[0]
             ymax = torch.max(target[:,[3,5,7,9]],1)[0]
-            res[:,2:3] = ((xmin+xmax)/2).view(target.shape[0],1)
-            res[:,3:4] = ((ymin+ymax)/2).view(target.shape[0],1)
-            res[:,4:5] = (xmax-xmin).view(target.shape[0],1)
-            res[:,5:6] = (ymax-ymin).view(target.shape[0],1)
+            res[:,2] = ((xmin+xmax)/2)
+            res[:,3] = ((ymin+ymax)/2)
+            res[:,4] = (xmax-xmin)
+            res[:,5] = (ymax-ymin)
         return res
 
 def get_rec_box_for_predict(target):

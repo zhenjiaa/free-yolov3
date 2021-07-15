@@ -46,7 +46,7 @@ class refine_head(nn.Module):
     # export = False  # onnx export
     def __init__(self, nc=1,ch=512,up =1):  # detection layer
         super(refine_head, self).__init__()
-        self.no = 5+nc
+        self.no = 9+nc
         self.m = nn.Conv2d(ch,self.no,1) # output conv
         self.upsample = up
         
