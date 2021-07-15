@@ -146,13 +146,15 @@ def test(data,
                     new_res = []
                     for bbox in boxes:
                         len_bb = bbox.shape[0]
-                        if len_bb==0:
-                            len_bb=1
-                        if len_bb!=1:
+                        # if len_bb==0:
+                        #     len_bb=1
+                        if len_bb>1:
                             # print(torch.cat(output[c:c+len_bb],0).shape)
                             a = torch.cat(output[c:c+len_bb],0)
-                        else:
+                        elif len_bb>1:
                             a = output[c]
+                        else:
+                            a = torch.zeros(0,6).to(device)
                         new_res.append(a)
                         c = c+len_bb
                     output = new_res
