@@ -2,7 +2,7 @@
 
 LOG=log/train_ccpd_ID2-`date +%Y-%m-%d-%H-%M-%S`.log
 
-python  train_scratch.py \
+python  refine/train.py \
     --img 320 \
     --batch 16 \
     --epochs 300 \
@@ -11,6 +11,4 @@ python  train_scratch.py \
     --hyp data/hyp.scratch.yaml \
     --weight yolov3.pt \
     --project runs/train_ccpd_ID2 \
-    --cache-images \
-    --cache-images \
-    --device 0 2>&1 | tee $LOG
+    --device 1 2>&1 | tee $LOG
