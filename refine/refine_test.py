@@ -150,7 +150,10 @@ def test(data,
                         #     len_bb=1
                         if len_bb>1:
                             # print(torch.cat(output[c:c+len_bb],0).shape)
-                            a = torch.cat(output[c:c+len_bb],0)
+                            k__ = []
+                            for i in range(len_bb):
+                                k__.append(output[c+i].to(device))
+                            a = torch.cat(k__,0)
                         elif len_bb>1:
                             a = output[c]
                         else:
