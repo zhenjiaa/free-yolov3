@@ -154,7 +154,7 @@ def test(data,
                             for i in range(len_bb):
                                 k__.append(output[c+i].to(device))
                             a = torch.cat(k__,0)
-                        elif len_bb>1:
+                        elif len_bb==1:
                             a = output[c]
                         else:
                             a = torch.zeros(0,6).to(device)
