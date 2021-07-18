@@ -133,6 +133,8 @@ class refine_net(nn.Module):
             if m =='Conv':
                 per_conv = Conv(ch,args[0],args[1],args[2])
                 ch = args[0]
+            elif m=='nn.Upsample':
+                per_conv = nn.Upsample('None',2,'nearest')
             modellist.append(per_conv)
         return nn.Sequential(*modellist),ch
 

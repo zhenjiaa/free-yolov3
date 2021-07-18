@@ -258,3 +258,4 @@ runs_ccpd/*
 nohup.out
 cfg/*
 script/*
+*wakanda*
