@@ -115,6 +115,7 @@ class refine_net(nn.Module):
         x = torch.zeros(1,ch,z,z)
         for i,layer in enumerate(self.rf_model):
             x = layer(x)
+        print('downsample',z/x.shape[-1])
         return z/x.shape[-1]
     
     def forward(self,x,boxes=[],train=True,eval=False):
@@ -134,7 +135,7 @@ class refine_net(nn.Module):
                 per_conv = Conv(ch,args[0],args[1],args[2])
                 ch = args[0]
             elif m=='nn.Upsample':
-                per_conv = nn.Upsample('None',2,'nearest')
+                per_conv = nn.Upsample(None,2,'nearest')
             modellist.append(per_conv)
         return nn.Sequential(*modellist),ch
 
@@ -160,8 +161,8 @@ class detector():
         for i,pred_ in enumerate(preds):
             # print(torch.max(pred_[:,4]),pred_[0,4:])
             pred = pred_[:,0:4]
-            if pred.shape[0]>20:
-                pred=pred[0:20,:]
+            if pred.shape[0]>25:
+                pred=pred[0:25,:]
             # pred = torch.tensor([[0,160,160,320]]).to(feature.device).float()
             prd = torch.zeros_like(pred).to(feature.device)
             if pred.shape[0]!=0:
@@ -215,14 +216,14 @@ if __name__ == '__main__':
     detector_args={}
     detector_args['conf_thres']=0.00001
     detector_args['iou_thres']=0.6
-    model = refine_yolo('models/yolov3.yaml',detector_args=detector_args).to(device)
+    model = refine_yolo('cfg/ccpd/refine_down8.yaml',detector_args=detector_args).to(device)
     model.train()
     # print(model)
     # x = torch.rand((8,3,32,32)).to(device)
     # x = cv2.imread('/data1/paper_/test/free-yolov3/coco128/images/train2017/000000000009.jpg')
     # x = torch.tensor(cv2.resize(x,(320,320))).to(device)
     # x = x.permute(2,0,1).unsqueeze(0).float()
-    # (detect_res,pred),feature = model(x,refine=True)
+    (detect_res,pred),feature = model(x,refine=True)
     # res,boxes = model.detector_(detect_res,[x])
     print(model)
     # if model.training:

@@ -89,8 +89,8 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
             ckpt['model'].yaml['anchors'] = round(hyp['anchors'])  # force autoanchor
 
         detector_args={}
-        detector_args['conf_thres']=0.1
-        detector_args['iou_thres']=0.6
+        detector_args['conf_thres']=0.05
+        detector_args['iou_thres']=0.5
         model = refine_yolo(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc,detector_args=detector_args).to(device)  # create
         exclude = ['anchor'] if opt.cfg or hyp.get('anchors') else []  # exclude keys
         state_dict = ckpt['model'].float().state_dict()  # to FP32
