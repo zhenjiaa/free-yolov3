@@ -65,7 +65,11 @@ class refine_head(nn.Module):
             boxes = boxes[0]
             y = x.sigmoid()
             self.grid = self._make_grid(nx, ny).to(x.device)
-            y[..., 0:2] = ((y[...,0:2] * 2. - 0.5 )+ self.grid).to(x.device)
+            y[..., 0:2] = ((y[...,0:2]- 0.5 )*2.+ self.grid).to(x.device)
+            y[..., 2:4] = ((y[...,2:4]- 0.5 )*2.+ self.grid).to(x.device)
+            y[..., 4:6] = ((y[...,4:6]- 0.5 )*2.+ self.grid).to(x.device)
+            y[..., 6:8] = ((y[...,6:8]- 0.5 )*2.+ self.grid).to(x.device)
+            print(y[...,0:8])
             
             y[..., [0,2,4,6]] = y[...,[0,2,4,6]]*(boxes[:,2]-boxes[:,0]).view(-1,1,1)/2+boxes[:,0].view(-1,1,1)
             y[..., [1,3,5,7]] = y[...,[1,3,5,7]]*(boxes[:,3]-boxes[:,1]).view(-1,1,1)/2+boxes[:,1].view(-1,1,1)

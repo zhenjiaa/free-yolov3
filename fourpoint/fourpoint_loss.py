@@ -59,10 +59,85 @@ class FocalLoss(nn.Module):
             return loss.sum()
         else:  # 'none'
             return loss
-def compute_loss_refinenet(p,targets,boxes,model):
+def compute_loss_refinenet(p,targets,boxes,model,imgs):
     device = targets.device
+        ########## 
+    # try:
+    #     import cv2
+    #     ig = (imgs[0].permute(1,2,0)*255).cpu().numpy().copy()
+    #     lbox = boxes[0][0]
+    #     x1 = int(lbox[0])
+    #     x2 = int(lbox[1])
+    #     x3 = int(lbox[2])
+    #     x4 = int(lbox[3])
+    #     name = x3
+    #     print(x1,x2,x3,x4)
+    #     cv2.line(ig,(x1,x2),(x3,x4),(0,255,255),2)
+    #     cv2.imwrite('yanzheng/'+str(name)+'_1.jpg',ig)
+    # except:
+    #     pass
     all_batch_target = build_targets_forbatch([320,320],targets,boxes)
     indices,tpoint,tcls,tbox = build_targets_forlayer(p, all_batch_target)
+
+    ###############444 yanzheng
+    
+    # import cv2
+    # ig = (imgs[0].permute(1,2,0)*255).cpu().numpy().copy()
+    # targets = targets[0]*320
+    # if int(targets[0])==0:
+    #     x1 = int(targets[2])
+    #     x2 = int(targets[3])
+    #     x3 = int(targets[4])
+    #     x4 = int(targets[5])
+    #     name = x3
+    #     cv2.line(ig,(x1,x2),(x3,x4),(0,255,255),2)
+    #     x1 = int(targets[6])
+    #     x2 = int(targets[7])
+    #     x3 = int(targets[8])
+    #     x4 = int(targets[9])
+    #     cv2.line(ig,(x1,x2),(x3,x4),(0,255,255),2)
+    #     cv2.imwrite('yanzheng/'+str(name)+'_2.jpg',ig)
+
+    # ########## 
+    # try:
+    #     import cv2
+    #     ig = (imgs[0].permute(1,2,0)*255).cpu().numpy().copy()
+    #     lbox = boxes[0][0]
+    #     x1 = int(lbox[0])
+    #     x2 = int(lbox[1])
+    #     x3 = int(lbox[2])
+    #     x4 = int(lbox[3])
+    #     # name = x3
+    #     print(x1,x2,x3,x4)
+    #     cv2.line(ig,(x1,x2),(x3,x4),(0,255,255),2)
+    #     cv2.imwrite('yanzheng/'+str(name)+'_1.jpg',ig)
+    # except:
+    #     pass
+    
+
+
+    ###############333 yanzheng
+    # try:
+    #     import cv2
+    #     ig = (imgs[0].permute(1,2,0)*255).cpu().numpy().copy()
+    #     lbox = boxes[0][0]
+    #     abt = all_batch_target[0]
+        
+    #     x1 = int(lbox[0]+(lbox[2]-lbox[0])*abt[2])
+    #     x2 = int(lbox[1]+(lbox[3]-lbox[1])*abt[3])
+    #     # cv2.po
+    #     x3 = int(lbox[0]+(lbox[2]-lbox[0])*abt[4])
+    #     x4 = int(lbox[1]+(lbox[3]-lbox[1])*abt[5])
+    #     name = str(x3)+str(x4)
+    #     cv2.line(ig,(x1,x2),(x3,x4),(0,255,255),2)
+    #     x1 = int(lbox[0]+(lbox[2]-lbox[0])*abt[6])
+    #     x2 = int(lbox[1]+(lbox[3]-lbox[1])*abt[7])
+    #     x3 = int(lbox[0]+(lbox[2]-lbox[0])*abt[8])
+    #     x4 = int(lbox[1]+(lbox[3]-lbox[1])*abt[9])
+    #     cv2.line(ig,(x1,x2),(x3,x4),(0,255,255),2)
+    #     cv2.imwrite('yanzheng/'+str(name)+'.jpg',ig)
+    # except:
+    #     print('xxxxxxxxxxxx')
     
 
     
@@ -101,6 +176,29 @@ def compute_loss_refinenet(p,targets,boxes,model):
             if True:
                 # print(ps.shape)
                 p_fourpoint = (ps[:, :8].sigmoid()-0.5)*2
+
+                #### yanzheng
+                # try:
+                #     import cv2
+                #     ig = (imgs[0].permute(1,2,0)*255).cpu().numpy().copy()
+                #     lbox__ = boxes[0][0]
+                #     b, gj_, gi_ = indices[0][0][0],indices[0][1][0],indices[0][2][0]
+                #     p_fourpoint___ = p_fourpoint[0]
+                #     x1 = int((p_fourpoint___[0]+gi_)/2*(lbox__[2]-lbox__[0])+lbox__[0])
+                #     x2 = int((p_fourpoint___[1]+gj_)/2*(lbox__[3]-lbox__[1])+lbox__[1])
+                #     x3 = int((p_fourpoint___[2]+gi_)/2*(lbox__[2]-lbox__[0])+lbox__[0])
+                #     x4 = int((p_fourpoint___[3]+gj_)/2*(lbox__[3]-lbox__[1])+lbox__[1])
+                #     cv2.line(ig,(x1,x2),(x3,x4),(0,255,255),2)
+                #     x1 = int((p_fourpoint___[4]+gi_)/2*(lbox__[2]-lbox__[0])+lbox__[0])
+                #     x2 = int((p_fourpoint___[5]+gj_)/2*(lbox__[3]-lbox__[1])+lbox__[1])
+                #     x3 = int((p_fourpoint___[6]+gi_)/2*(lbox__[2]-lbox__[0])+lbox__[0])
+                #     x4 = int((p_fourpoint___[7]+gj_)/2*(lbox__[3]-lbox__[1])+lbox__[1])
+                #     cv2.line(ig,(x1,x2),(x3,x4),(0,255,255),2)
+                #     cv2.imwrite('yanzheng/'+str(name)+'_1.jpg',ig)
+                # except:
+                #     pass
+                # print('xxxxxxxxxxxx')
+                # exit()
                 # print(p_fourpoint.shape)
                 # print(tpoint[i].shape)
                 lpoint_loss += F.mse_loss(p_fourpoint,tpoint[i])
@@ -114,7 +212,7 @@ def compute_loss_refinenet(p,targets,boxes,model):
                 # pbox = torch.cat((pxy, pwh), 1).to(device)  # predicted box
                 # iou = bbox_iou(pbox.T, tbox[i], x1y1x2y2=False, DIoU=True,CIoU=True)  # iou(prediction, target)
                 iou = bbox_iou(pbox.T.to(device), tbox[i].to(device), x1y1x2y2=False,CIoU=True)  # iou(prediction, target)
-                lbox += (1.0 - iou).mean()
+                #lbox += (1.0 - iou).mean()
 
             # Objectness
             tobj[b, gj, gi] = (1.0 - model.gr) + model.gr * iou.detach().clamp(0).type(tobj.dtype)  # iou ratio
@@ -158,8 +256,8 @@ def build_targets_forbatch(feature_size,target,bboxes):
         bbox = bboxes[j]
         if nt and len(bbox):
             im_target = im_target.detach()
-            im_target[:,[2,4,6,8]] = im_target[:,[2,4,6,8]]*feature_size[0]
-            im_target[:,[3,5,7,9]] = im_target[:,[3,5,7,9]]*feature_size[1]
+            im_target[:,[2,4,6,8]] = im_target[:,[2,4,6,8]]*(feature_size[0]-1)
+            im_target[:,[3,5,7,9]] = im_target[:,[3,5,7,9]]*(feature_size[1]-1)
             # im_target[:,4] = im_target[:,4]*feature_size[0]
             # im_target[:,5] = im_target[:,5]*feature_size[1]
             # im_target = im_target.repeat(len(bbox),1)
@@ -181,9 +279,9 @@ def build_targets_forbatch(feature_size,target,bboxes):
             all_batch_target.append((im_target_res))
             BOX_COUNT+=len(bbox)
             # print(im_target.shape)
-    if  len(bboxes):    
+    try:
         all_batch_target=torch.cat(all_batch_target,0)
-    else:
+    except:
         return torch.zeros(0,10)
     return all_batch_target
 
@@ -201,6 +299,7 @@ def build_targets_forlayer(p, targets):
         b, c = t[:, :2].long().T  # image, class
         gxy = t[:, 10:12]  # grid xy
         offsets = 0
+        # gxy -=0.5
         gxy_ = torch.round(gxy)
         gwh = t[:,12:14]
 

@@ -63,6 +63,7 @@ def detect(save_img=False):
     img = torch.zeros((1, 3, imgsz, imgsz), device=device)  # init img
     _ = model(img.half() if half else img) if device.type != 'cpu' else None  # run once
     for path, img, im0s, vid_cap in dataset:
+        
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
@@ -78,6 +79,27 @@ def detect(save_img=False):
         res,boxes = model.detector_(pred,feature)
         model.refine_net = model.refine_net.to(device)
         res = model.refine_net(res,boxes,train=False)
+        print(res.shape)
+        
+        
+        res = res[0]
+        print(res.shape)
+        res = res[3,:]
+        box = boxes[0][0]
+        print(box)
+        x1 = int(res[0])
+        y1 = int(res[1])
+        x2 = int(res[2])
+        y2 = int(res[3])
+        x3 = int(res[4])
+        y3 = int(res[5])
+        x4 = int(res[6])
+        y4 = int(res[7])
+        img = (img[0]*255).permute(1,2,0).cpu().numpy().copy()
+        img = cv2.line(img,(x1,y1),(x2,y2),(255,255,0),2)
+        img = cv2.line(img,(x3,y3),(x4,y4),(255,0,0),2)
+        cv2.imwrite('yanzheng/'+path.split('/')[-1],img)
+        continue
         # print(res.shape)
         # res = res.contiguous().view(1,-1,res.shape[-1])
         # pred = non_max_suppression(res, 0.15, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
@@ -157,9 +179,9 @@ def detect(save_img=False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', nargs='+', type=str, default='runs_ccpd/refine_yolov3_valastrain/exp4/weights/last.pt', help='model.pt path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default='runs/train/exp12/weights/last.pt', help='model.pt path(s)')
     parser.add_argument('--source', type=str, default='val/', help='source')  # file/folder, 0 for webcam
-    parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
+    parser.add_argument('--img-size', type=int, default=320, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.45, help='IOU threshold for NMS')
     parser.add_argument('--device', default='2', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')

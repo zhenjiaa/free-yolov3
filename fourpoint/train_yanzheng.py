@@ -275,16 +275,6 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
             
 
-            # ig = imgs[0].permute(1,2,0).numpy().copy()
-            # x1 = int(targets[2])
-            # x2 = int(targets[3])
-            # x3 = int(targets[4])
-            # x4 = int(targets[5])
-            # cv2.line(ig,(x1,x2),(x3,x4),(0,255,255),2)
-            # cv2.imwrite('yanzheng/1.jpg',ig)
-            # print('xxxxxxxxxxxx')
-            # exit()
-
             ni = i + nb * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
 
@@ -322,7 +312,18 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                     model.refine_net = model.refine_net.to(device)
                     res = model.refine_net(res,boxes)
                     refine_loss, refine_loss_items=compute_loss_refinenet(res,targets.to(device),boxes,model,imgs)
-                    ####
+                    
+                    #### write box
+
+                    # ig = (imgs[0].permute(1,2,0)*255).cpu().numpy().copy()
+                    # lbox = boxes[0][0]
+                    # x1 = int(lbox[0])
+                    # x2 = int(lbox[1])
+                    # x3 = int(lbox[2])
+                    # x4 = int(lbox[3])
+                    # cv2.line(ig,(x1,x2),(x3,x4),(0,255,255),2)
+                    # cv2.imwrite('yanzheng/1.jpg',ig)
+                    # print('xxxxxxxxxxxx')
                     
                     loss +=refine_loss
                 loss_items = torch.cat((loss_items,refine_loss.detach()))
@@ -460,7 +461,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch-size', type=int, default=4, help='total batch size for all GPUs')
     parser.add_argument('--img-size', nargs='+', type=int, default=[320, 320], help='[train, test] image sizes')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
-    parser.add_argument('--resume', nargs='?', const=True, default='runs/train/exp14/weights/last.pt', help='resume most recent training')
+    parser.add_argument('--resume', nargs='?', const=True, default='runs/train/exp12/weights/last.pt', help='resume most recent training')
     parser.add_argument('--nosave', action='store_true', help='only save final checkpoint')
     parser.add_argument('--notest', action='store_true', help='only test final epoch')
     parser.add_argument('--noautoanchor', action='store_true', help='disable autoanchor check')
@@ -468,7 +469,7 @@ if __name__ == '__main__':
     parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
     parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
     parser.add_argument('--image-weights', action='store_true', help='use weighted image selection for training')
-    parser.add_argument('--device', default='0', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--device', default='3', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--multi-scale', action='store_true', help='vary img-size +/- 50%%')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
     parser.add_argument('--adam', action='store_true', help='use torch.optim.Adam() optimizer')
