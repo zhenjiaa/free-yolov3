@@ -220,7 +220,7 @@ def compute_loss_refinenet(p,targets,boxes,model,imgs):
 
             # Classification
             if model.nc > 1:  # cls loss (only if multiple classes)
-                t = torch.full_like(ps[:, 5:], cn, device=device)  # targets
+                t = torch.full_like(ps[:, 9:], cn, device=device)  # targets
                 t[range(n), tcls[i]] = cp
                 lcls += BCEcls(ps[:, 9:], t)  # BCE
 
