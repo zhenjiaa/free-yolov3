@@ -35,9 +35,9 @@ from utils.general import labels_to_class_weights, increment_path, labels_to_ima
     print_mutation, set_logging
 from utils.google_utils import attempt_download
 from utils.loss import compute_loss
-from refine.refine_loss import compute_loss_refinenet
+from refine.refine_loss import compute_loss_refinenet,compute_recall
 from utils.plots import plot_images, plot_labels, plot_results, plot_evolution
-from utils.torch_utils import ModelEMA, select_device, intersect_dicts, torch_distributed_zero_first
+from utils.torch_utils import ModelEMA, is_parallel, select_device, intersect_dicts, torch_distributed_zero_first
 
 logger = logging.getLogger(__name__)
 
@@ -300,11 +300,17 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                 loss, loss_items = compute_loss(pred, targets.to(device), model)  # loss scaled by batch_size
                 refine_loss = torch.zeros(1,device=device)
                 refine_ = False
-                if epoch>40:
-                    refine_ = True
-                    res,boxes = model.detector_(detect_res,feature)
-                    model.refine_net = model.refine_net.to(device)
-                    res = model.refine_net(res,boxes)
+                if epoch>2:
+                    if is_parallel(model):
+                        refine_ = True
+                        res,boxes = model.module.detector_(detect_res,feature)
+                        model.module.refine_net = model.module.refine_net.to(device)
+                        res = model.module.refine_net(res,boxes)
+                    else:
+                        refine_ = True
+                        res,boxes = model.detector_(detect_res,feature)
+                        model.refine_net = model.refine_net.to(device)
+                        res = model.refine_net(res,boxes)
                     refine_loss, refine_loss_items=compute_loss_refinenet(res,targets.to(device),boxes,model)
                     loss +=refine_loss
                 loss_items = torch.cat((loss_items,refine_loss.detach()))
@@ -436,8 +442,8 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', type=str, default='yolov3.pt', help='initial weights path')
-    parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
-    parser.add_argument('--data', type=str, default='', help='data.yaml path')
+    parser.add_argument('--cfg', type=str, default='cfg/ccpd/ccpd_valastrain.yaml', help='model.yaml path')
+    parser.add_argument('--data', type=str, default='cfg/ccpd/ccpd_valastrain.yaml', help='data.yaml path')
     parser.add_argument('--hyp', type=str, default='data/hyp.scratch.yaml', help='hyperparameters path')
     parser.add_argument('--epochs', type=int, default=300)
     parser.add_argument('--batch-size', type=int, default=16, help='total batch size for all GPUs')
