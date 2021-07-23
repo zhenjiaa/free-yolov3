@@ -2,6 +2,7 @@ from enum import Flag
 import sys
 from unicodedata import decimal
 sys.path.append('./')
+from utils.torch_utils import is_parallel
 import argparse
 import logging
 import models
@@ -317,10 +318,15 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                 refine_loss = torch.zeros(1,device=device)
                 refine_ = False
                 if epoch>2:
-                    refine_ = False
-                    res,boxes = model.detector_(detect_res,feature)
-                    model.refine_net = model.refine_net.to(device)
-                    res = model.refine_net(res,boxes)
+                    if is_parallel(model):
+                        res,boxes = model.module.detector_(detect_res,feature)
+                        model.module.refine_net = model.module.refine_net.to(device)
+                        res = model.module.refine_net(res,boxes)
+                        
+                    else:
+                        res,boxes = model.detector_(detect_res,feature)
+                        model.refine_net = model.module.refine_net.to(device)
+                        res = model.refine_net(res,boxes)
                     refine_loss, refine_loss_items=compute_loss_refinenet(res,targets.to(device),boxes,model,imgs)
                     ####
                     
