@@ -184,7 +184,7 @@ def build_targets_forlayer(p, targets):
         b, c = t[:, :2].long().T  # image, class
         gxy = t[:, 2:4]  # grid xy
         offsets = 0
-        gxy_ = torch.round(gxy)
+        gxy_ = torch.round(gxy-0.5)
 
         gwh = t[:, 4:6]  # grid wh
 
