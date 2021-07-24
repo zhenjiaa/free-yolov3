@@ -175,7 +175,8 @@ def compute_loss_refinenet(p,targets,boxes,model,imgs):
             # Regression
             if True:
                 # print(ps.shape)
-                p_fourpoint = (ps[:, :8].sigmoid()-0.5)*2
+                # p_fourpoint = (ps[:, :8].sigmoid()-0.5)*2
+                p_fourpoint = (ps[:, :8].sigmoid()*2-0.5)*2
 
                 #### yanzheng
                 # try:
@@ -212,7 +213,7 @@ def compute_loss_refinenet(p,targets,boxes,model,imgs):
                 # pbox = torch.cat((pxy, pwh), 1).to(device)  # predicted box
                 # iou = bbox_iou(pbox.T, tbox[i], x1y1x2y2=False, DIoU=True,CIoU=True)  # iou(prediction, target)
                 iou = bbox_iou(pbox.T.to(device), tbox[i].to(device), x1y1x2y2=False,CIoU=True)  # iou(prediction, target)
-                #lbox += (1.0 - iou).mean()
+                lbox += (1.0 - iou).mean()
 
             # Objectness
             tobj[b, gj, gi] = (1.0 - model.gr) + model.gr * iou.detach().clamp(0).type(tobj.dtype)  # iou ratio
@@ -300,7 +301,7 @@ def build_targets_forlayer(p, targets):
         gxy = t[:, 10:12]  # grid xy
         offsets = 0
         # gxy -=0.5
-        gxy_ = torch.round(gxy)
+        gxy_ = torch.round(gxy-0.5)
         gwh = t[:,12:14]
 
         gij = (gxy_ - offsets).long()

@@ -65,10 +65,10 @@ class refine_head(nn.Module):
             boxes = boxes[0]
             y = x.sigmoid()
             self.grid = self._make_grid(nx, ny).to(x.device)
-            y[..., 0:2] = ((y[...,0:2]- 0.5 )*2.+ self.grid).to(x.device)
-            y[..., 2:4] = ((y[...,2:4]- 0.5 )*2.+ self.grid).to(x.device)
-            y[..., 4:6] = ((y[...,4:6]- 0.5 )*2.+ self.grid).to(x.device)
-            y[..., 6:8] = ((y[...,6:8]- 0.5 )*2.+ self.grid).to(x.device)
+            y[..., 0:2] = ((y[...,0:2]*2.- 0.5 )*2.+ self.grid).to(x.device)
+            y[..., 2:4] = ((y[...,2:4]*2.- 0.5 )*2.+ self.grid).to(x.device)
+            y[..., 4:6] = ((y[...,4:6]*2.- 0.5 )*2.+ self.grid).to(x.device)
+            y[..., 6:8] = ((y[...,6:8]*2.- 0.5 )*2.+ self.grid).to(x.device)
             print(y[...,0:8])
             
             y[..., [0,2,4,6]] = y[...,[0,2,4,6]]*(boxes[:,2]-boxes[:,0]).view(-1,1,1)/2+boxes[:,0].view(-1,1,1)
@@ -78,20 +78,7 @@ class refine_head(nn.Module):
             y = y.contiguous().view(bs,-1,y.shape[-1])
             # y[..., 4] = torch.ones_like(y[..., 4]).to(x.device)
             return y
-        if eval:
-            boxes_ = torch.cat(boxes,0)
-            # num_b = boxes_.shape[1]
-            y = x.sigmoid()
-            self.grid = self._make_grid(nx, ny).to(x.device)
-            y[..., 0:8] = ((y[...,0:8]- 0.5)*2+ self.grid).to(x.device)
-            
-            y[..., 0] = y[...,0]*(boxes_[:,2]-boxes_[:,0]).view(-1,1,1)/2+boxes_[:,0].view(-1,1,1)
-            y[..., 1] = y[...,1]*(boxes_[:,3]-boxes_[:,1]).view(-1,1,1)/2+boxes_[:,1].view(-1,1,1)
-            y[..., 2] = (y[..., 2])*(boxes_[:,2]-boxes_[:,0]).view(-1,1,1)
-            y[..., 3] = (y[..., 3])*(boxes_[:,3]-boxes_[:,1]).view(-1,1,1)
-            y = y.contiguous().view(bs,-1,y.shape[-1])
-            return y
-            # y[..., 4] = torch.ones_like(y[..., 4]).to(x.device)
+
 
 
         return [x] if self.train else y
