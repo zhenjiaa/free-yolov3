@@ -284,7 +284,8 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
             # Forward
             with amp.autocast(enabled=cuda):
                 pred = model(imgs)  # forward
-                loss, loss_items = compute_loss(pred, targets.to(device), model)  # loss scaled by batch_size
+                # loss, loss_items = compute_loss(pred, targets.to(device),model,gt_agument=True)  # loss scaled by batch_size
+                loss, loss_items = compute_loss(pred, targets.to(device), model,opt.gt_agument)  # loss scaled by batch_size
                 if torch.isnan(loss):
                     continue
                 if rank != -1:
@@ -414,10 +415,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', type=str, default='yolov3.pt', help='initial weights path')
     parser.add_argument('--cfg', type=str, default='free_yolo/free-yolov3.yaml', help='model.yaml path')
+    parser.add_argument('--gt_agument', action='store_true', help='agument GT while compute loss')
     parser.add_argument('--data', type=str, default='cfg/ccpd/ccpd_valastrain.yaml', help='data.yaml path')
     parser.add_argument('--hyp', type=str, default='data/hyp.scratch.yaml', help='hyperparameters path')
     parser.add_argument('--epochs', type=int, default=300)
-    parser.add_argument('--batch-size', type=int, default=32, help='total batch size for all GPUs')
+    parser.add_argument('--batch-size', type=int, default=64, help='total batch size for all GPUs')
     parser.add_argument('--img-size', nargs='+', type=int, default=[320, 320], help='[train, test] image sizes')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')
@@ -426,9 +428,9 @@ if __name__ == '__main__':
     parser.add_argument('--noautoanchor', action='store_true', help='disable autoanchor check')
     parser.add_argument('--evolve', action='store_true', help='evolve hyperparameters')
     parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
-    parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
+    parser.add_argument('--cache-images', action='store_true',help='cache images for faster training')
     parser.add_argument('--image-weights', action='store_true', help='use weighted image selection for training')
-    parser.add_argument('--device', default='0', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--device', default='2,3', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--multi-scale', action='store_true', help='vary img-size +/- 50%%')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
     parser.add_argument('--adam', action='store_true', help='use torch.optim.Adam() optimizer')
