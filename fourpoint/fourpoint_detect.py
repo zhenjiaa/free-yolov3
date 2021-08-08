@@ -16,7 +16,7 @@ from numpy import nanprod, random
 
 from models.experimental import attempt_load
 from utils.datasets import letterbox
-from utils.general import check_img_size, non_max_suppression, apply_classifier, scale_coords, xyxy2xywh, \
+from utils.general import check_img_size, non_max_suppression, apply_classifier, scale_coords_foupoint, xyxy2xywh, \
     strip_optimizer, set_logging, increment_path
 from utils.plots import plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_synchronized
@@ -40,6 +40,11 @@ def process(img,device,img_size):
 
 
 def detect_img(model,im0s,device,imgsz,save_img):
+
+    '''
+    model ->img
+    img
+    '''
     img = im0s.copy()
     img = process(img,device,imgsz)
     # Inference
@@ -58,8 +63,7 @@ def detect_img(model,im0s,device,imgsz,save_img):
     flag = 1
     for i in range(res.shape[0]):
         res_ = res[i,index_[i]]
-        print(res_[8])
-        if res_[8]>0.75:
+        if res_[8]>0.4:
             flag=0
         else:
             continue
@@ -70,8 +74,9 @@ def detect_img(model,im0s,device,imgsz,save_img):
 
     res_box = numpy.array(res_box,dtype=numpy.float)
     shape_ = [img.shape[2],img.shape[3],3]
-    res_box[:, :4] = scale_coords(shape_, res_box[:, :4], im0s.shape).round()
-    res_box[:, 4:8] = scale_coords(shape_, res_box[:, 4:8], im0s.shape).round()
+    print(shape_,res_box.shape,im0s.shape)
+    res_box[:, :4] = scale_coords_foupoint(shape_, res_box[:, :4], im0s.shape).round()
+    res_box[:, 4:8] = scale_coords_foupoint(shape_, res_box[:, 4:8], im0s.shape).round()
     if save_img:
         for res_ in res_box:
             x1 = int(res_[0])
@@ -128,8 +133,8 @@ def detect_box(opt):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', nargs='+', type=str, default='last_boxloss.pt', help='model.pt path(s)')
-    parser.add_argument('--source', type=str, default='1/', help='source')  # file/folder, 0 for webcam
+    parser.add_argument('--weights', nargs='+', type=str, default='/data1/diedai/5_0727/free-yolov3/runs/train_fourpoint_ccpd_ID1/exp/weights/last.pt', help='model.pt path(s)')
+    parser.add_argument('--source', type=str, default='/data1/diedai/5_0727/free-yolov3/set_train/', help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=320, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.45, help='IOU threshold for NMS')
